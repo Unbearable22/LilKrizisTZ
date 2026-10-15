@@ -1,0 +1,22 @@
+services:
+  bot:
+    build: .
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+    volumes:
+      - assistant_data:/app/data
+    restart: unless-stopped
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+    command: ["python", "-m", "land_assistant", "api", "--host", "0.0.0.0"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - assistant_data:/app/data
+    restart: unless-stopped
+volumes:
+  assistant_data:

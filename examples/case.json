@@ -1,0 +1,21 @@
+{
+  "client": "ДЕМОНСТРАЦИОННЫЙ КЛИЕНТ",
+  "address": "Учебный участок, адрес вымышлен",
+  "cadastre": "90:12:172201:102",
+  "purpose": "housing",
+  "use_code": "2.1",
+  "zone": "DEMO-Ж1",
+  "zone_source": "Демонстрационная карта, не реальная зона",
+  "zone_verified_by": "DEMO",
+  "coordinates": [[34.1,45.0],[34.1004,45.0],[34.1004,45.0003],[34.1,45.0003]],
+  "area_m2": 1049,
+  "building_area_m2": 150,
+  "floor_area_m2": 300,
+  "height_m": 8,
+  "setback_m": 4,
+  "ownership": "Учебная частная собственность",
+  "category": "Учебная категория",
+  "restrictions_checked": true,
+  "restrictions": [],
+  "nspd_evidence": "Синтетические данные — не выписка и не результат запроса НСПД"
+}
