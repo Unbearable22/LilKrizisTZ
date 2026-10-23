@@ -21,6 +21,7 @@ def main():
     doc=sub.add_parser('documents');doc.add_argument('id',type=int);doc.add_argument('--output',type=Path,required=True)
     sub.add_parser('demo')
     sub.add_parser('console')
+    web=sub.add_parser('web');web.add_argument('--demo',action='store_true');web.add_argument('--port',type=int,default=8080);web.add_argument('--knowledge-root',type=Path,default=Path(__file__).resolve().parent.parent/'knowledge')
     args=parser.parse_args()
     settings=Settings.from_env()
     db=Database(settings.data_dir)
@@ -31,6 +32,15 @@ def main():
             if not db.rows('SELECT id FROM municipalities WHERE id=?',(mid,)):
                 service.import_municipality({'id':mid,'name':name})
         print('База создана. Проверенные ПЗЗ и границы ещё не импортированы.')
+    elif args.command=='web':
+        try:
+            from .legal.web import serve_web
+            from .legal.pipeline import LegalPipeline
+            from .legal.model import DemoModel,LiveModel
+        except ImportError as exc:
+            raise ValueError('Установите зависимости: python -m pip install -r requirements-legal.txt (рекомендуется .venv).') from exc
+        model=DemoModel() if args.demo else LiveModel(settings)
+        serve_web(LegalPipeline(args.knowledge_root,model,demo=args.demo),Path(__file__).resolve().parent.parent/'groundAndLaw',args.port)
     elif args.command=='bot':
         from .telegram import Telegram
         Telegram(settings,service).run()

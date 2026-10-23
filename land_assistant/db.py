@@ -25,6 +25,7 @@ class Database:
             CREATE TABLE IF NOT EXISTS sources(id INTEGER PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL UNIQUE, municipality_id TEXT REFERENCES municipalities(id), kind TEXT NOT NULL, digest TEXT, last_checked TEXT, error TEXT);
             CREATE TABLE IF NOT EXISTS revisions(id INTEGER PRIMARY KEY, source_id INTEGER NOT NULL REFERENCES sources(id), digest TEXT NOT NULL, previous_text TEXT, content TEXT NOT NULL, artifact TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(source_id,digest));
             CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL, case_id INTEGER REFERENCES cases(id), revision_id INTEGER NOT NULL REFERENCES revisions(id), data TEXT NOT NULL, delivered_at TEXT, UNIQUE(owner_id,case_id,revision_id));
+            CREATE TABLE IF NOT EXISTS nspd_reports(id INTEGER PRIMARY KEY, case_id INTEGER NOT NULL REFERENCES cases(id), digest TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(case_id,digest));
             CREATE TABLE IF NOT EXISTS sessions(owner_id INTEGER PRIMARY KEY, data TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS state(key TEXT PRIMARY KEY, value TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS legal_documents(id INTEGER PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL, version TEXT NOT NULL, source_url TEXT NOT NULL, citation TEXT NOT NULL, content TEXT NOT NULL, valid_until TEXT NOT NULL, verified_by TEXT NOT NULL, verified_at TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, UNIQUE(kind,citation,version));

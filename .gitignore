@@ -7,3 +7,11 @@ __pycache__/
 data/*
 !data/.gitkeep
 *.log
+
+# Generated dated legal exports; working laws and changes.jsonl stay versioned.
+deliverables/Законы — снимок *.md
+deliverables/Нормативная база — *.zip
+deliverables/Проверка официальных публикаций — *.zip
+deliverables/Проверка по эталонам — *.zip
+
+.venv-speech/

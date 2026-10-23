@@ -1,0 +1,129 @@
+{
+  "snapshot_date": "2026-10-21",
+  "verification": "Full normative text alignment to ConsultantPlus completed for all 919 primary blocks; all 943 Garant article pages retrieved and additionally compared. Disagreements resolved in favor of ConsultantPlus. This is text conformity under the accepted reference policy, not an independent official or expert legal verification. Initial valid_until was 2026-10-21. Full unchanged-text recheck completed 2026-10-22; current valid_until is 2026-10-22.",
+  "documents": [
+    {
+      "id": "zk",
+      "title": "Земельный кодекс Российской Федерации",
+      "law": "136-ФЗ от 25.10.2001",
+      "edition": "2026-08-04",
+      "effective_from": "2026-09-01",
+      "crosscheck_url": "https://www.consultant.ru/document/cons_doc_LAW_33773/",
+      "files": [
+        "zk_01.md",
+        "zk_02.md"
+      ],
+      "bytes": 1360206,
+      "reference_blocks": 184,
+      "original_import": {
+        "download_url": "https://www.kontur-extern.ru/info/normativ/document/1/508049-zemelnyy-kodeks-rossiyskoy-federatsii",
+        "raw_sha256": "e425336a6e8b3a87a2b928af153891417c13917c586f811f4b87ffb6739e901c",
+        "articles": 179,
+        "crosscheck_edition_found": true,
+        "crosscheck_effective_date_found": true
+      },
+      "download_url": "https://www.consultant.ru/document/cons_doc_LAW_33773/",
+      "primary_root_sha256": "5d8400fd56a4838aa66431ac2140f87da4c3daba199e37da8036504920881a39"
+    },
+    {
+      "id": "grad",
+      "title": "Градостроительный кодекс Российской Федерации",
+      "law": "190-ФЗ от 29.12.2004",
+      "edition": "2026-08-04",
+      "effective_from": "2026-09-01",
+      "crosscheck_url": "https://www.consultant.ru/document/cons_doc_LAW_51040/",
+      "files": [
+        "grad_01.md",
+        "grad_02.md",
+        "grad_03.md"
+      ],
+      "bytes": 2222190,
+      "reference_blocks": 143,
+      "original_import": {
+        "download_url": "https://www.kontur-extern.ru/info/normativ/document/1/507978-gradostroitelnyy-kodeks-rossiyskoy-federatsii",
+        "raw_sha256": "28cd8fc310a7c3a9c093c689b0c872276dcfb539ca5e4dea600b53bb22c6ac37",
+        "articles": 142,
+        "crosscheck_edition_found": true,
+        "crosscheck_effective_date_found": true
+      },
+      "download_url": "https://www.consultant.ru/document/cons_doc_LAW_51040/",
+      "primary_root_sha256": "9fe65bbf0a71c2a7c57fbb4412d2afca086b1961a950293eebf46f91d0b62b12"
+    },
+    {
+      "id": "gpk",
+      "title": "Гражданский процессуальный кодекс Российской Федерации",
+      "law": "138-ФЗ от 14.11.2002",
+      "edition": "2026-08-04",
+      "effective_from": "2026-09-01",
+      "crosscheck_url": "https://www.consultant.ru/document/cons_doc_LAW_39570/",
+      "files": [
+        "gpk_01.md",
+        "gpk_02.md"
+      ],
+      "bytes": 1145751,
+      "reference_blocks": 505,
+      "original_import": {
+        "download_url": "https://www.kontur-extern.ru/info/normativ/document/1/508046-grazhdanskiy-protsessualnyy-kodeks-rossiyskoy-federatsii",
+        "raw_sha256": "b9057dab0a7047bdbdd16ffc600aaa5ffb6ca5c2081ef8cedb155bd72a4fb3ca",
+        "articles": 514,
+        "crosscheck_edition_found": true,
+        "crosscheck_effective_date_found": true
+      },
+      "download_url": "https://www.consultant.ru/document/cons_doc_LAW_39570/",
+      "primary_root_sha256": "bba2a31cb480d75dd29d8ab84fb45353584a09c43e3b9ee1fc079ca4367dfde3"
+    },
+    {
+      "id": "agro",
+      "title": "Об обороте земель сельскохозяйственного назначения",
+      "law": "101-ФЗ от 24.07.2002",
+      "edition": "2025-12-29",
+      "effective_from": "2026-03-01",
+      "crosscheck_url": "https://www.consultant.ru/document/cons_doc_LAW_37816/",
+      "files": [
+        "agro_01.md"
+      ],
+      "bytes": 178245,
+      "reference_blocks": 29,
+      "original_import": {
+        "download_url": "https://www.kontur-extern.ru/info/normativ/document/1/504588-federalnyy-zakon-ot-24-07-2002-n-101-fz",
+        "raw_sha256": "aef94dec64f6eb14045e9acf526be944549e1afd4a3cda90fe05b77eb7a40fdd",
+        "articles": 29,
+        "crosscheck_edition_found": false,
+        "crosscheck_effective_date_found": false
+      },
+      "download_url": "https://www.consultant.ru/document/cons_doc_LAW_37816/",
+      "primary_root_sha256": "2cd260b212bdc7e0f37902efe078541aaeb472ea52fb9821395a51b4adc89393"
+    },
+    {
+      "id": "snt",
+      "title": "О ведении гражданами садоводства и огородничества для собственных нужд и о внесении изменений в отдельные законодательные акты Российской Федерации",
+      "law": "217-ФЗ от 29.07.2017",
+      "edition": "2025-07-31",
+      "effective_from": "2026-03-01",
+      "crosscheck_url": "https://www.consultant.ru/document/cons_doc_LAW_221173/",
+      "files": [
+        "snt_01.md"
+      ],
+      "bytes": 297475,
+      "reference_blocks": 58,
+      "original_import": {
+        "download_url": "https://www.kontur-extern.ru/info/normativ/document/1/504540-federalnyy-zakon-ot-29-07-2017-n-217-fz",
+        "raw_sha256": "53a09115a8888ddffcecae3fc5343b8b270745a6fe0a8d5b9a9830e46e4fb14c",
+        "articles": 58,
+        "crosscheck_edition_found": false,
+        "crosscheck_effective_date_found": false
+      },
+      "download_url": "https://www.consultant.ru/document/cons_doc_LAW_221173/",
+      "primary_root_sha256": "99fc5f8da1ecaa97b164f014dea70c03f90524c560e058bc296dc7fa2b7a7b3e"
+    }
+  ],
+  "official_audit": "knowledge/official-audit-summary.json",
+  "full_official_verification": false,
+  "corrections_file": "knowledge/official-corrections.json",
+  "reference_audit_file": "knowledge/reference-audit-summary.json",
+  "reference_policy_verification_completed": true,
+  "previous_verification": "Publisher edition checked; 504 declared original/amending acts retrieved from SZRF and hashes checked. Full consolidated comparison and independent amendment completeness NOT established. Two occurrences of an incorrect amendment date in GPK corrected from official publication. valid_until is a same-day operational recheck deadline, not expiry of law.",
+  "last_rechecked_at": "2026-10-22",
+  "current_valid_until": "2026-10-22",
+  "reference_recheck": "knowledge/reference-audit-summary.json"
+}

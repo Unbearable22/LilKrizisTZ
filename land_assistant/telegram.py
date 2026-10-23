@@ -6,33 +6,22 @@ import urllib.request
 import uuid
 from .db import dumps, now
 from .documents import package, STATUS
-from .integrations import Integrations
+from .integrations import Integrations, NSPD_URBAN_URL
+from .nspd_reports import Reports, MAX_REPORT_BYTES
 from .monitor import Monitor
 from .network import request_json
+from .button_ui import ButtonUI, button
 
 LOG=logging.getLogger(__name__)
-MENU={'keyboard':[['📐 Новый участок','📁 Мои дела'],['🔔 Уведомления','❓ Помощь']],'resize_keyboard':True}
-HELP='''ООО «Земля и право» · юридический ассистент
-/new — пошаговая карточка
-/new {JSON} — полная карточка (см. examples/case.json)
-/cases — ваши дела
-/edit ID {JSON} — дополнить поля дела
-/analyze ID — проверка параметров
-/docs ID — ZIP: анализ, перечень, проект обращения, схема
-/nspd ID — предварительные сведения
-/explain ID — пояснение LLM по результатам расчёта
-/law land_code|town_code|civil_procedure|101-fz|217-fz вопрос — справка по проверенным нормам
-/concept ID building|interior пожелания — концепция; затем можно отправить фото или план
-/alerts — изменения источников
-/cancel — отмена текущего ввода
-Свободный текст: «анализ 1», «документы 1», «НСПД 1».
-Расчёты предварительные; ПЗЗ и документы проверяет специалист.'''
+MENU={'keyboard':[['📐 Новый участок','📁 Мои дела'],['🌐 НСПД','📚 Законодательство'],['🔔 Уведомления','❓ Помощь'],['🏠 Главное меню','❌ Отмена']],'resize_keyboard':True}
+HELP='Выберите действие кнопкой в меню. Создайте участок и откройте дело: анализ, документы, НСПД, редактирование и концепции доступны в его карточке.'
 
-class Telegram:
+class Telegram(ButtonUI):
     def __init__(self,settings,service):
         self.s,self.service=settings,service
         self.db=service.db
         self.integrations=Integrations(settings,service)
+        self.reports=Reports(service)
         self.alert_lock=threading.RLock()
         self.base='https://api.telegram.org/bot'+settings.telegram_token+'/'
 
@@ -69,9 +58,45 @@ class Telegram:
             self.db.execute('UPDATE notifications SET delivered_at=? WHERE id=?',(now(),row['id']))
         return len(rows)
 
+    def nspd_button(self,owner):
+        if self.s.telegram_token:
+            self.call('sendMessage',{'chat_id':owner,'text':'Откройте сервис, войдите на портале и сохраните результат. Затем отправьте сюда PDF или ссылку НСПД. Для отмены нажмите кнопку.', 'reply_markup':{'inline_keyboard':[[{'text':'Открыть градостроительную проработку НСПД','url':NSPD_URBAN_URL}],[button('Отмена','home')]]}})
+        else:
+            self.say(owner,NSPD_URBAN_URL+'\nОтправьте PDF или ссылку результата. Для отмены нажмите кнопку.')
+
+    def download_report(self,item):
+        size=item.get('file_size',0)
+        if not isinstance(size,int) or size<0 or size>MAX_REPORT_BYTES:
+            raise ValueError('PDF должен быть до 12 МБ.')
+        if not item.get('file_name','').lower().endswith('.pdf'):
+            raise ValueError('Сохраните результат как PDF и отправьте документом, либо пришлите ссылку НСПД.')
+        info=self.call('getFile',{'file_id':item['file_id']})
+        # The path is supplied by Telegram, never use the user's original filename as a local path.
+        path=info['file_path']
+        if not isinstance(path,str) or path.startswith('/') or '..' in path.split('/') or any(c in path for c in ('?', '#', '\\')):
+            raise ValueError('Некорректный путь файла Telegram.')
+        with urllib.request.urlopen('https://api.telegram.org/file/bot'+self.s.telegram_token+'/'+path,timeout=30) as response:
+            data=response.read(MAX_REPORT_BYTES+1)
+        if len(data)>MAX_REPORT_BYTES:
+            raise ValueError('PDF превышает 12 МБ.')
+        return data
+
+    def receive_nspd(self,owner,message,session):
+        cid=session['case_id']
+        self.service.case(cid,owner)
+        if message.get('document'):
+            report=self.reports.add_pdf(cid,owner,self.download_report(message['document']))
+        elif message.get('photo'):
+            raise ValueError('Пришлите исходный PDF документом или ссылку результата НСПД. Фото отчёта не импортируется.')
+        else:
+            report=self.reports.add_link(cid,owner,message.get('text','').strip())
+        self.db.session(owner,{})
+        self.panel(owner,self.reports.preparation(report['id'],owner),[[button('Материалы дела',f'reports:{cid}:0')],[button('Вернуться к делу',f'case:{cid}')]])
+
     def photo(self,owner,message,session):
         if session.get('step')!='concept_reference':
-            self.say(owner,'Для фото/плана сначала используйте /concept ID building|interior пожелания.')
+            self.say(owner,'Для отчёта выберите «НСПД» в деле; для фото или плана — «Концепция».')
+            self.choose_case(owner)
             return
         item=(message.get('photo') or [message.get('document')])[-1]
         if not item or item.get('file_size',0)>8*1024*1024:
@@ -88,20 +113,55 @@ class Telegram:
         data=self.integrations.concept(session['case_id'],owner,session['kind'],session['preferences'],image)
         self.send_file(owner,'concept-PRELIMINARY.png',data)
         self.db.session(owner,{})
-        self.say(owner,'Концепция не является проектной документацией; подключения требуют технических условий.')
+        self.case_panel(owner,session['case_id'],'Концепция не является проектной документацией; подключения требуют технических условий.')
 
     def handle(self,update):
+        callback=update.get('callback_query')
+        message=callback.get('message',{}) if callback else update.get('message',{})
+        actor=callback.get('from',{}) if callback else message.get('from',{})
+        owner=actor.get('id')
+        if owner not in self.s.allowed_users:
+            if owner is not None:LOG.warning('Доступ отклонён: Telegram ID %s отсутствует в ALLOWED_TELEGRAM_IDS.',owner)
+            return
+        if message.get('chat',{}).get('type')!='private' or message.get('chat',{}).get('id')!=owner:
+            return
+        try:
+            if callback:
+                if self.s.telegram_token:
+                    self.call('answerCallbackQuery',{'callback_query_id':callback['id']})
+                self.alerts(owner)
+                self.ui_callback(owner,callback.get('data',''))
+            elif not (message.get('document') or message.get('photo')):
+                self.alerts(owner)
+                if not self.ui_message(owner,message.get('text','').strip()):self._handle_message(update)
+            else:self._handle_message(update)
+        except (ValueError,KeyError,IndexError,TypeError) as exc:
+            detail=str(exc)[:300] if isinstance(exc,ValueError) else 'Кнопка устарела или данные имеют неверный формат.'
+            session=self.db.session(owner)
+            back=f'case:{session["case_id"]}' if session.get('case_id') else 'home'
+            self.panel(owner,'Не удалось выполнить действие: '+detail+'\nИсправьте значение или выберите другое действие.',[[button('Отмена',back),button('Главное меню','home')]])
+
+    def _handle_message(self,update):
         message=update.get('message',{})
         owner=message.get('from',{}).get('id')
-        if owner not in self.s.allowed_users or message.get('chat',{}).get('type')!='private' or message.get('chat',{}).get('id')!=owner:
+        if not message:
+            return
+        if owner not in self.s.allowed_users:
+            LOG.warning('Доступ отклонён: Telegram ID %s отсутствует в ALLOWED_TELEGRAM_IDS. Текст сообщения не записан.',owner)
+            return
+        if message.get('chat',{}).get('type')!='private' or message.get('chat',{}).get('id')!=owner:
+            LOG.warning('Доступ отклонён: используйте личный чат с ботом.')
             return
         self.alerts(owner)  # Notifications take precedence over menu state.
         session=self.db.session(owner)
         text=message.get('text','').strip()
+        if session.get('step')=='nspd_result' and (message.get('document') or message.get('photo') or text.startswith('https://')):
+            self.receive_nspd(owner,message,session)
+            return
         if message.get('photo') or message.get('document'):
             self.photo(owner,message,session)
             return
-        text={'📐 Новый участок':'/new','📁 Мои дела':'/cases','🔔 Уведомления':'/alerts','❓ Помощь':'/help'}.get(text,text)
+        text={'📐 Новый участок':'/new','📁 Мои дела':'/cases','🔔 Уведомления':'/alerts','❓ Помощь':'/help','🌐 НСПД':'/nspd'}.get(text,text)
         if text in ('/start','/help'):
             self.say(owner,HELP)
             return
@@ -113,24 +173,25 @@ class Telegram:
             self.wizard(owner,text,session)
             return
         if text=='/new':
-            self.db.session(owner,{'step':'client','payload':{}})
-            self.say(owner,'Введите ФИО или наименование клиента. /cancel — отмена.')
+            self.start_new(owner)
             return
         if text.startswith('/new '):
             cid=self.service.create_case(owner,json.loads(text[5:]))
             self.db.session(owner,{})
-            self.say(owner,f'Дело №{cid} создано. /analyze {cid}')
+            self.case_panel(owner,cid,'Дело создано.')
             return
         if text=='/cases':
-            rows=self.service.cases(owner)
-            self.say(owner,'\n'.join(f'№{r["id"]} · {r["data"]["client"]} · {r["data"]["address"]}' for r in rows) or 'Дел пока нет. /new')
+            self.choose_case(owner)
             return
         if text=='/alerts':
             self.say(owner,'Новых уведомлений нет: все ожидающие уведомления показаны перед меню.')
             return
+        if text=='/nspd':
+            self.choose_case(owner,'nspd')
+            return
         parts=text.split(maxsplit=2)
         if len(parts)<2:
-            self.say(owner,'Выберите типовую задачу в меню или /help.')
+            self.home(owner)
             return
         command={'анализ':'/analyze','документы':'/docs','нспд':'/nspd','поясни':'/explain'}.get(parts[0].lower(),parts[0].lower())
         if command=='/law':
@@ -142,9 +203,17 @@ class Telegram:
                 self.say(owner,'Проверенные актуальные выдержки не найдены. Загрузите их через администратора.')
             return
         cid=int(parts[1])
-        if command=='/edit':
+        if command=='/nspd_import':
+            self.service.case(cid,owner)
+            self.db.session(owner,{'step':'nspd_result','case_id':cid})
+            self.panel(owner,f'Прикрепление к делу №{cid}. Пришлите PDF до 12 МБ или HTTPS-ссылку результата на nspd.gov.ru.',[[button('Отмена',f'case:{cid}')]])
+        elif command=='/nspd_reports':
+            self.reports_panel(owner,cid)
+        elif command=='/nspd_report':
+            self.ui_callback(owner,f'report:{cid}')
+        elif command=='/edit':
             self.service.update_case(cid,owner,json.loads(parts[2]))
-            self.say(owner,f'Дело №{cid} обновлено. /analyze {cid}')
+            self.case_panel(owner,cid,'Данные обновлены.')
         elif command=='/analyze':
             r=self.service.analyze(cid,owner)
             text=f'Дело №{cid} · {STATUS[r["status"]]}\n'+r['notice']
@@ -158,48 +227,32 @@ class Telegram:
         elif command=='/docs':
             self.send_file(owner,f'case-{cid}.zip',package(self.service,cid,owner))
         elif command=='/nspd':
-            self.say(owner,dumps(self.integrations.nspd(cid,owner)))
+            self.service.case(cid,owner)
+            self.db.session(owner,{'step':'nspd_result','case_id':cid})
+            self.nspd_button(owner)
+            result=self.integrations.nspd(cid,owner)
+            if result['status']=='manual_action_required':
+                self.say(owner,result['notice']+'\n'+result['service_url']+'\nКадастровый номер: '+(result['cadastre'] or 'не задан')+'\n\n'+'\n'.join(f'{i}. {step}' for i,step in enumerate(result['steps'],1)))
+                if result['contour_geojson']:
+                    self.send_file(owner,f'case-{cid}-nspd.geojson',json.dumps(result['contour_geojson'],ensure_ascii=False).encode())
+            else:
+                self.say(owner,dumps(result))
         elif command=='/explain':
             self.say(owner,dumps(self.integrations.explain(cid,owner)))
         elif command=='/concept':
             self.service.case(cid,owner)
             if len(parts)<3 or parts[2].split()[0] not in ('building','interior'):
-                raise ValueError('/concept ID building|interior пожелания')
+                raise ValueError('Выберите вид концепции в карточке дела.')
             extra=parts[2].split(maxsplit=1)
             self.db.session(owner,{'step':'concept_reference','case_id':cid,'kind':extra[0],'preferences':extra[1] if len(extra)>1 else ''})
-            self.say(owner,'Отправьте фото участка/помещения или план здания (PNG/JPEG). /generate — без фото, /cancel — отмена.')
+            self.panel(owner,'Отправьте фото участка/помещения или план (PNG/JPEG).',[[button('Создать без фото',f'generate:{cid}')],[button('Отмена',f'case:{cid}')]])
         else:
-            self.say(owner,'Задача не распознана. /help')
-
-    def wizard(self,owner,text,s):
-        step,p=s['step'],s['payload']
-        prompts={'client':('address','Введите адрес участка.'),'address':('cadastre','Введите кадастровый номер или «нет» для образуемого участка.'),'cadastre':('purpose','Назначение: housing — жильё, commercial — коммерция, agriculture — сельское хозяйство.'),'purpose':('coordinates','Введите координаты WGS84 в JSON: [[долгота,широта], ...] либо «нет».')}
-        if step=='coordinates':
-            if text.lower()!='нет':
-                p['coordinates']=json.loads(text)
-            cid=self.service.create_case(owner,p)
-            self.db.session(owner,{})
-            self.say(owner,f'Создано дело №{cid}. /analyze {cid}\nДополняйте карточку: /edit {cid} {{"area_m2": 1000, "zone": "Ж-1"}}')
-            return
-        if step=='cadastre':
-            from .service import CADASTRE
-            if text.lower()!='нет':
-                if not CADASTRE.fullmatch(text):
-                    raise ValueError('Неверный кадастровый номер; пример: 90:12:172201:102.')
-                p[step]=text
-        elif step=='purpose':
-            if text not in ('housing','commercial','agriculture'):
-                raise ValueError('Введите housing, commercial или agriculture.')
-            p[step]=text
-        else:
-            p[step]=text
-        next_step,prompt=prompts[step]
-        self.db.session(owner,{'step':next_step,'payload':p})
-        self.say(owner,prompt)
+            self.home(owner)
 
     def run(self):
         if not self.s.telegram_token or not self.s.allowed_users:
             raise ValueError('Задайте TELEGRAM_BOT_TOKEN и ALLOWED_TELEGRAM_IDS. Пустой список запрещает доступ всем.')
+        LOG.info('Бот запущен; разрешённых пользователей: %s. Ожидание сообщений…',len(self.s.allowed_users))
         stop=threading.Event()
         def background():
             last_monitor=0
@@ -222,23 +275,9 @@ class Telegram:
     def _poll(self):
         while True:
             try:
-                updates=self.call('getUpdates',{'offset':int(self.db.state('telegram_offset') or 0),'timeout':20,'allowed_updates':['message']})
+                updates=self.call('getUpdates',{'offset':int(self.db.state('telegram_offset') or 0),'timeout':20,'allowed_updates':['message','callback_query']})
                 for update in updates:
-                    owner=update.get('message',{}).get('from',{}).get('id')
-                    try:
-                        text=update.get('message',{}).get('text','')
-                        session=self.db.session(owner) if owner in self.s.allowed_users else {}
-                        if text=='/generate' and session.get('step')=='concept_reference' and update['message'].get('chat',{}).get('type')=='private':
-                            self.alerts(owner)
-                            data=self.integrations.concept(session['case_id'],owner,session['kind'],session['preferences'])
-                            self.send_file(owner,'concept-PRELIMINARY.png',data)
-                            self.db.session(owner,{})
-                        else:
-                            self.handle(update)
-                    except (ValueError,KeyError,IndexError,TypeError) as exc:
-                        if owner in self.s.allowed_users and update.get('message',{}).get('chat',{}).get('type')=='private':
-                            detail=str(exc)[:250] if isinstance(exc,ValueError) else 'Проверьте формат команды и обязательные поля.'
-                            self.say(owner,'Не удалось выполнить запрос: '+detail+'\n/help; /cancel — сброс ввода.')
+                    self.handle(update)
                     self.db.state('telegram_offset',update['update_id']+1)
             except Exception as exc:
                 LOG.error('Цикл Telegram: %s',type(exc).__name__)
