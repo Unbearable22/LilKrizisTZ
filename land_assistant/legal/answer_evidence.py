@@ -30,7 +30,7 @@ def validate_claims(claims,fragments):
     return ValidationResult(claims,[],[])
 
 def public_evidence(fragments):
-    result=[];seen=set()
+    result=[];seen={}
     for f in fragments:
         if f.get('demo'):continue
         try:
@@ -38,9 +38,11 @@ def public_evidence(fragments):
             datetime.fromisoformat(f['last_checked_at'])
         except (LegalError,KeyError,ValueError,TypeError):continue
         key=(f['source_url'],f.get('citation',''))
-        if key in seen:continue
-        seen.add(key)
-        result.append({'number':len(result)+1,'title':f.get('title',''),'publisher':policy.publisher,'source_kind':f.get('source_kind',policy.source_kind),'url':f['source_url'],'citation':f.get('citation',''),'revision':f.get('version',''),'checked_at':f['last_checked_at']})
+        refs=[v for v in f.get('_claim_refs',[]) if isinstance(v,str) and re.fullmatch(r'[a-zA-Z0-9_-]{1,30}/(?:answer|scenario:[0-2]|basis:[0-5])',v)]
+        if key in seen:
+            seen[key]['claim_ids']=sorted(set(seen[key]['claim_ids']+refs));continue
+        result.append({'number':len(result)+1,'title':f.get('title',''),'publisher':policy.publisher,'source_kind':f.get('source_kind',policy.source_kind),'url':f['source_url'],'citation':f.get('citation',''),'revision':f.get('version',''),'checked_at':f['last_checked_at'],'claim_ids':refs})
+        seen[key]=result[-1]
     return result
 
 def validate_claim_sections(result,fragments):

@@ -82,7 +82,7 @@ class ConsultantLibrary:
                     if current and len(current)+len(line)+1>4000:pieces.append(current);current=''
                     current=(current+'\n'+line).strip()
                 if current:pieces.append(current)
-                ranked=sorted(enumerate(pieces),key=lambda row:(0 if row[0]==0 else 1,-len(words & terms(row[1]))))[:3]
+                ranked=sorted(enumerate(pieces),key=lambda row:(0 if row[0]==0 else 1,-(len(words & terms(row[1]))+(1000 if 'чек' in query.casefold() and 'чек' in row[1].casefold() else 0))))[:3]
                 for index,piece in sorted(ranked):
                     if len(piece)>budget.context_left:omitted=True;continue
                     document_id='cp_'+root['id']+'_'+hashlib.sha256(item['url'].encode()).hexdigest()[:8]

@@ -22,8 +22,9 @@ class ConsultantLegalMCP:
                 for key,v in found['budget'].items():setattr(budget,key,v)
                 for hit in found['fragments']:
                     fragments.append(value(await session.call_tool('read_verified_fragment',{'fragment_id':hit['id'],'as_of_date':as_of_date})));trace.append('mcp.tools.read')
+                if found.get('coverage_gaps'):master+='\nНе объявляй ответ полным: '+' '.join(found['coverage_gaps'])
                 checked=min((f['last_checked_at'] for f in fragments),default=None)
                 limitations=['Использованы общедоступные нормативные материалы; покрытие может быть неполным.']
                 if found.get('source_errors'):limitations.append('Часть нормативных материалов не удалось загрузить или проверить; ответ ограничен доступным контекстом.')
                 if any(f.get('partial') for f in fragments):limitations.append('Часть статьи или связанных норм не вошла в контекст; ответ ограничен прочитанными фрагментами.')
-                return {'prompt':master,'fragments':fragments,'source_errors':found.get('source_errors',[]),'source_checked_at':checked,'limitations':limitations,'trace':trace}
+                return {'prompt':master,'coverage_gaps':found.get('coverage_gaps',[]),'fragments':fragments,'source_errors':found.get('source_errors',[]),'source_checked_at':checked,'limitations':limitations,'trace':trace}

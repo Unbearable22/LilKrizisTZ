@@ -8,7 +8,7 @@ def attach_source_tools(server,root,cache_root,budget):
     async def search_verified_documents(query:str,legal_topic:str,as_of_date:str,refresh:bool=False)->dict:
         try:
             found=await library.search(query,legal_topic,as_of_date,budget,refresh)
-            return {'fragments':found,'source_errors':list(dict.fromkeys(library.errors)),'budget':budget.wire()}
+            return {'fragments':found,'source_errors':list(dict.fromkeys(library.errors)),'coverage_gaps':library.coverage_gaps,'budget':budget.wire()}
         except SourceError as exc:return {'fragments':[],'source_errors':[exc.code],'budget':budget.wire()}
     @server.tool()
     def read_verified_fragment(fragment_id:str,as_of_date:str)->dict:

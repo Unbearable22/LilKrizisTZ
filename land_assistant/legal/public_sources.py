@@ -27,7 +27,7 @@ async def official_fragments(query,topic,as_of_date,budget,library):
  if topic!='tax' or not re.search(r'продаж|недвижим',query,re.I):return []
  today=datetime.now(ZoneInfo('Europe/Moscow')).date().isoformat()
  if as_of_date!=today:raise SourceError('source_edition_unknown')
- budget.take('root');started=time.monotonic()
+ budget.take('article');budget.take('root');started=time.monotonic()
  try:
   from .trusted_http import fetch_document
   if budget.documents_left<=0:raise SourceError('source_budget_exhausted')

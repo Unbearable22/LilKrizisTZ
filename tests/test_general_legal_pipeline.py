@@ -92,7 +92,7 @@ class PublicFallbackPipelineTests(unittest.TestCase):
    async def answer(self,**kw):
     self.calls+=1
     if self.calls>1:raise LegalError('llm_http',http_status=502)
-    return {'status':'partial_answer','answer':'Проверенная общая часть.','citations':['known'],'limitations':[],'missing_fields':[],'scenarios':[{'condition':'срок подтверждён','outcome':'можно проверить освобождение','citations':['known']}]}
+    return {'status':'partial_answer','answer':'Проверенная общая часть.','citations':['known'],'limitations':['Связанные нормы не представлены.'],'missing_fields':[],'scenarios':[{'condition':'срок подтверждён','outcome':'можно проверить освобождение','citations':['known']}]}
   with tempfile.TemporaryDirectory() as tmp:
    p=LegalPipeline(make_library(tmp),Model(),False);f={'id':'known','title':'Прочитанный акт','citation':'Статья 1','demo':False,'text':'Проверенное правило.'}
    with patch.object(p,'context_for_task',new=AsyncMock(return_value={'prompt':'Правила','fragments':[f],'trace':[]})),patch.object(p,'fallback_context',new=AsyncMock(return_value={'prompt':'Правила','fragments':[{**f,'id':'official'}],'trace':[]})):

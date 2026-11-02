@@ -31,3 +31,32 @@ class VerifiedPipelineTests(unittest.TestCase):
    local.return_value.context=AsyncMock(return_value={'prompt':'Правила','trace':[],'fragments':[{'id':'a','text':'Первый'},{'id':'b','text':'Второй'}]})
    result=asyncio.run(p.context_for_task(task,budget=budget,as_of_date=__import__('datetime').datetime.now(__import__('zoneinfo').ZoneInfo('Europe/Moscow')).date().isoformat()))
   self.assertEqual(len(result['fragments']),1);self.assertEqual(budget.articles_left,0)
+ def test_identical_fallback_evidence_does_not_regenerate_answer(self):
+  class Model(DemoModel):
+   calls=0
+   async def classify(self,*a,**kw):return {'tasks':[{'task_id':'x','function_id':'general_legal_help','formulation':'зарплата','legal_topic':'labor','scope':'individual'}]}
+   async def answer(self,**kw):
+    self.calls+=1
+    return {'status':'partial_answer','answer':'Общий порядок.','citations':['known'],'limitations':['Связанные нормы не представлены.'],'missing_fields':[],'scenarios':[{'condition':'факт подтвердится','outcome':'можно уточнить порядок','citations':['known']}]}
+  f={'id':'known','title':'Трудовой кодекс Российской Федерации','text':'Подтверждённая норма о выплате.','source_url':'https://www.consultant.ru/document/cons_doc_LAW_34683/','citation':'Статья 136','demo':False}
+  context={'prompt':'Правила','fragments':[f],'trace':[]};model=Model();p=LegalPipeline('knowledge',model,False)
+  with patch.object(p,'context_for_task',AsyncMock(return_value=context)),patch.object(p,'fallback_context',AsyncMock(return_value={**context,'fragments':[{**f,'id':'different_cache_id'}]})):
+   result=asyncio.run(p.run('Не платят зарплату',{}))
+  self.assertEqual(result['status'],'partial_answer');self.assertEqual(model.calls,1)
+ def test_claim_sources_are_included_in_public_documents(self):
+  class Model(DemoModel):
+   async def classify(self,*a,**kw):return {'tasks':[{'task_id':'x','function_id':'general_legal_help','formulation':'зарплата','legal_topic':'labor','scope':'general'}]}
+   async def answer(self,**kw):return {'status':'answered','answer':'Общий порядок.','citations':['a'],'limitations':[],'claims':[{'section':'answer','evidence_ids':['b'],'anchors':[{'fragment_id':'b','quote':'Подтверждённая норма о выплате'}]}]}
+  def f(fid,doc):return {'id':fid,'title':'Акт','text':'Подтверждённая норма о выплате.','source_url':f'https://www.consultant.ru/document/cons_doc_LAW_{doc}/','citation':'Статья 136','demo':False,'last_checked_at':'2026-11-02T10:00:00+00:00'}
+  p=LegalPipeline('knowledge',Model(),False)
+  with patch.object(p,'context_for_task',AsyncMock(return_value={'prompt':'Правила','fragments':[f('a',1),f('b',2)],'trace':[]})):
+   r=asyncio.run(p.run('Не платят зарплату',{}))
+  self.assertEqual(len(r['evidence']),2);self.assertIn('x/answer',r['evidence'][1]['claim_ids'])
+ def test_missing_facts_alone_do_not_trigger_source_regeneration(self):
+  class Model(DemoModel):
+   async def classify(self,*a,**kw):return {'tasks':[{'task_id':'x','function_id':'general_legal_help','formulation':'зарплата','legal_topic':'labor','scope':'individual'}]}
+   async def answer(self,**kw):return {'status':'partial_answer','answer':'Общий порядок.','citations':['f'],'limitations':['Точная сумма задолженности неизвестна.'],'missing_fields':['amount'],'scenarios':[{'condition':'долг подтвердится','outcome':'можно уточнить сумму','citations':['f']}]}
+  p=LegalPipeline('knowledge',Model(),False)
+  with patch.object(p,'context_for_task',AsyncMock(return_value={'prompt':'Правила','fragments':[{'id':'f','title':'Прочитанный документ','text':'Норма об оплате труда.','demo':False}],'trace':[]})),patch.object(p,'fallback_context',AsyncMock(return_value={'fragments':[],'trace':[]})) as fallback:
+   r=asyncio.run(p.run('Не платят зарплату',{}))
+  self.assertEqual(r['status'],'partial_answer');fallback.assert_not_awaited()

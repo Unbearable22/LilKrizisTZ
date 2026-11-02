@@ -102,9 +102,18 @@ class LegalPipeline:
             logging.getLogger(__name__).warning('public_fallback_failed code=%s',getattr(exc,'code','source_unavailable'))
             return {**empty,'source_errors':[getattr(exc,'code','source_unavailable')]}
     @staticmethod
+    def needs_source_expansion(result):
+        if result.get('status')=='insufficient_sources':return True
+        if result.get('source_gaps'):return True
+        limits=' '.join(v for v in result.get('limitations',[]) if isinstance(v,str))
+        return bool(re.search(r'(?:норм|материал|основан|редакц)[^.]{0,70}(?:недостат|не раскр|не предст|не вош|отсутств)|(?:недостат|не раскр|не предст|не вош|отсутств)[^.]{0,70}(?:норм|материал|основан|редакц)',limits,re.I))
+    @staticmethod
+    def fragment_key(f):
+        return (f.get('source_url',f['id']),f.get('citation',''),' '.join(f.get('text','').split()))
+    @staticmethod
     def merge_context(primary,extra):
         dates=[c['source_checked_at'] for c in (primary,extra) if c.get('source_checked_at')]
-        return {**primary,'fragments':list({f['id']:f for f in primary['fragments']+extra['fragments']}.values()),'trace':extra.get('trace',[]),'limitations':primary.get('limitations',[])+extra.get('limitations',[]),'source_checked_at':min(dates) if dates else None}
+        return {**primary,'fragments':list({LegalPipeline.fragment_key(f):f for f in reversed(primary['fragments']+extra['fragments'])}.values()),'trace':extra.get('trace',[]),'limitations':primary.get('limitations',[])+extra.get('limitations',[]),'source_checked_at':min(dates) if dates else None}
     async def run(self,question,intake,history=None):
         started=time.monotonic();stage='input';run_id=uuid.uuid4().hex;trace=['input.validate']
         base={'status':'error','question':question if isinstance(question,str) else '', 'tasks':[], 'missing_fields':[], 'answer':'','sources':[], 'mode':'demo' if self.demo else 'live','trace':trace,'limitations':[], 'diagnostics':{'run_id':run_id}}
@@ -154,9 +163,10 @@ class LegalPipeline:
                         stage='answer';arguments=dict(original_question=question,formulation=task['formulation'],intake=intake,prompt=context['prompt'],fragments=fragments,scope=task['scope'])
                         if history:arguments['history']=history
                         result=await self.model.answer(**arguments);trace+=['llm.answer'];stage='answer_validate'
-                        if isinstance(result,dict) and result.get('status') in ('insufficient_sources','partial_answer') and not fallback_used:
+                        if isinstance(result,dict) and context.get('coverage_gaps') and result.get('status')=='answered':result={**result,'status':'insufficient_sources'}
+                        if isinstance(result,dict) and result.get('status') in ('insufficient_sources','partial_answer') and self.needs_source_expansion(result) and not fallback_used:
                             fallback_used=True;extra=await self.fallback_context(task,budget=budget,as_of_date=as_of_date)
-                            if extra['fragments']:
+                            if extra['fragments'] and any(self.fragment_key(f) not in {self.fragment_key(p) for p in fragments} for f in extra['fragments']):
                                 primary_context=context;primary_result=result;primary_arguments=dict(arguments);primary_valid=False
                                 try:validate_answer(primary_result,fragments,scope=task['scope']);primary_valid=True
                                 except LegalError:pass
@@ -167,6 +177,7 @@ class LegalPipeline:
                                     result=primary_result;context={**primary_context,'limitations':primary_context.get('limitations',[])+['Дополнительная проверка не завершена; сохранён первоначальный проверенный разбор.']};fragments=context['fragments'];arguments=primary_arguments
                                 trace.append('llm.answer_fallback');stage='answer_validate'
                         trace.append('answer.validate')
+                        if isinstance(result,dict) and result.get('claims') and result.get('status')!='insufficient_sources' and not getattr(self.model,'require_grounded_claims',False):validate_claim_sections(result,fragments)
                         repaired=False
                         try:validate_answer(result,fragments,scope=task['scope'])
                         except LegalError as exc:
@@ -177,18 +188,20 @@ class LegalPipeline:
                         if getattr(self.model,'require_grounded_claims',False):
                             for attempt in range(2):
                                 try:
-                                    stage='evidence_validate';validate_claim_sections(result,fragments)
+                                    stage='evidence_validate'
                                     if time.monotonic()>budget.deadline-5:raise SourceError('source_budget_exhausted')
                                     stage='evidence_semantic_check'
-                                    async with asyncio.timeout(min(20,max(.1,budget.deadline-time.monotonic()-1))):
-                                        supported=await self.model.verify_evidence(result=result,fragments=fragments)
+                                    async with asyncio.timeout(min(30,max(.1,budget.deadline-time.monotonic()-1))):
+                                        supported=await self.model.verify_evidence(result=result,fragments=fragments,original_question=question,formulation=task['formulation'])
                                     trace.append('evidence.semantic_check')
                                     if not supported:raise LegalError('unsupported_claims')
+                                    validate_claim_sections(result,fragments)
                                     break
                                 except LegalError as exc:
                                     if repaired or attempt or budget.deadline-time.monotonic()<30 or not callable(getattr(self.model,'rewrite_answer',None)):raise
                                     repaired=True;stage='evidence_repair'
-                                    result=await self.model.rewrite_answer(draft=result,**arguments)
+                                    repair=getattr(self.model,'repair_grounding',self.model.rewrite_answer)
+                                    result=await repair(draft=result,**arguments)
                                     validate_answer(result,fragments,scope=task['scope'])
                                     if result.get('status')=='insufficient_sources':raise LegalError('unsupported_claims')
                         if getattr(self.model,'require_legal_bases',False) and not result.get('legal_bases'):raise LegalError('invalid_legal_bases')
@@ -204,7 +217,13 @@ class LegalPipeline:
                             f=available[b['fragment_id']];title=f['title'].split(' — часть')[0];title=(f.get('act_designation','')+' «'+title+'»') if f.get('act_designation') else title
                             item={'title':title,'article':f.get('citation',''),'explanation':b['explanation']}
                             if item not in bases:bases.append(item)
-                        for c in citations:sources[c]={k:v for k,v in available[c].items() if k!='text'}
+                        for b in result.get('legal_bases',[]):citations.append(b['fragment_id'])
+                        for claim in result.get('claims',[]):citations.extend(claim['evidence_ids'])
+                        for c in citations:
+                            refs=[task['task_id']+'/'+claim['section'] for claim in result.get('claims',[]) if c in claim['evidence_ids']]
+                            refs.extend(task['task_id']+'/basis:'+str(i) for i,b in enumerate(result.get('legal_bases',[])) if c==b['fragment_id'])
+                            previous=sources.get(c,{}).get('_claim_refs',[])
+                            sources[c]={**{k:v for k,v in available[c].items() if k!='text'},'_claim_refs':sorted(set(previous+refs))}
                         answers.append(text);limits.extend(context.get('limitations',[]));limits.extend(result.get('limitations',[]));outcomes.append({'task_id':task['task_id'],'status':'partial_answer' if is_partial else 'answered','summary':task['formulation'][:200]})
                         if context.get('source_checked_at'):checked.append(context['source_checked_at'])
                     except asyncio.CancelledError:raise

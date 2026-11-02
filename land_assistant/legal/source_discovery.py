@@ -1,5 +1,6 @@
 """Direct discovery from publisher TOCs and a verified local index, no search API."""
 from collections import defaultdict
+import re
 from pathlib import Path
 from .consultant_library import ConsultantLibrary
 from .consultant_types import SourceError
@@ -10,12 +11,12 @@ from .public_sources import official_fragments
 class VerifiedSourceLibrary:
     def __init__(self,root,cache_root):
         self.root=Path(root);self.library=ConsultantLibrary(self.root/'consultant/roots.json',cache_root)
-        self.index=SourceIndex(Path(cache_root)/'verified-index.sqlite');self.allowed_ids=set();self.errors=[]
+        self.index=SourceIndex(Path(cache_root)/'verified-index.sqlite');self.allowed_ids=set();self.errors=[];self.coverage_gaps=[]
     async def search(self,query,legal_topic,as_of_date,budget,refresh=False):
-        self.errors=[]
+        self.errors=[];self.coverage_gaps=[]
         allowed_roots=[r['url'] for r in self.library.roots if r.get('enabled') and legal_topic in r['topics']]
         hits=[] if refresh else [f for f in self.index.search(query,8,as_of_date) if any(f['source_url'].startswith(url) for url in allowed_roots)]
-        if hits:
+        if hits and self.covered(query,legal_topic,hits):
             selected=[]
             for f in hits:
                 if budget.articles_left<=0:break
@@ -40,8 +41,17 @@ class VerifiedSourceLibrary:
         for url,parts in groups.items():
             f=parts[0]
             self.index.upsert(VerifiedDocument(url,f['title'],'ФНС России' if f.get('source_kind')=='official_explanation' else 'КонсультантПлюс',f.get('source_kind','normative_act'),'guidance' if f.get('source_kind')=='official_explanation' else 'current',f['version'],f['last_checked_at'],[{'text':p['text'],'citation':p.get('citation',''),'partial':p.get('partial',False),'scope_note':p.get('scope_note',''),'act_designation':p.get('act_designation','')} for p in parts]))
+        if found and not self.covered(query,legal_topic,[self.library.read(f['id'],as_of_date) for f in found]):self.coverage_gaps=['Не найдены все основания о правах при недостатках товара и подтверждении покупки.']
         self.allowed_ids={f['id'] for f in found}
         return found
+    @staticmethod
+    def covered(query,topic,fragments):
+        if topic!='consumer' or not re.search(r'недостат|отсутствие.*чек',query,re.I):return True
+        rights=[f for f in fragments if re.search(r'Статья\s+18(?!\d|\.\d)',f.get('citation',''),re.I)]
+        if not rights:return False
+        text=' '.join(f.get('text','') for f in rights).casefold()
+        if not re.search(r'вправе|потребова|своему выбору',text):return False
+        return 'чек' not in query.casefold() or 'чек' in text
     def read(self,fragment_id,as_of_date):
         if fragment_id not in self.allowed_ids:raise SourceError('source_unknown_fragment')
         if fragment_id.startswith('idx_'):

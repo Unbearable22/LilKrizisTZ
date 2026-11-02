@@ -51,7 +51,7 @@
         for(const key of ['status','answer','mode','chat_id','requestId']) {
             if(typeof value[key]==='string')result[key]=value[key];
         }
-        result.evidence=(Array.isArray(value.evidence)?value.evidence:[]).filter(safeEvidence).slice(0,24).map(({title,publisher,source_kind,url,citation,revision,checked_at},i)=>({number:i+1,title,publisher,source_kind,url,citation,revision,checked_at}));
+        result.evidence=(Array.isArray(value.evidence)?value.evidence:[]).filter(safeEvidence).slice(0,24).map(({title,publisher,source_kind,url,citation,revision,checked_at,claim_ids},i)=>({number:i+1,title,publisher,source_kind,url,citation,revision,checked_at,claim_ids:(Array.isArray(claim_ids)?claim_ids:[]).filter(v=>typeof v==='string' && /^[a-zA-Z0-9_-]{1,30}\/(?:answer|scenario:[0-2]|basis:[0-5])$/.test(v))}));
         result.missing_fields=(Array.isArray(value.missing_fields)?value.missing_fields:[])
             .filter(item=>item && typeof item.key==='string' && typeof item.label==='string' && !hasReferences(item.key) && !hasReferences(item.label))
             .map(({key,label})=>({key,label}));
