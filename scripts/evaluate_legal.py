@@ -26,7 +26,7 @@ def local_env():
     if path.exists():
         for line in path.read_text().splitlines():
             key,sep,value=line.strip().partition('=')
-            if sep and key in ('LLM_URL','LLM_API_KEY','LLM_MODEL','LLM_CLASSIFY_TIMEOUT','LLM_ANSWER_TIMEOUT','LLM_CLASSIFIER_MODEL','LLM_ANSWER_TOKENS'):
+            if sep and key in ('LLM_URL','LLM_API_KEY','LLM_MODEL','LLM_CLASSIFY_TIMEOUT','LLM_ANSWER_TIMEOUT','LLM_CLASSIFIER_MODEL','LLM_VERIFIER_MODEL','LLM_ANSWER_TOKENS'):
                 os.environ.setdefault(key,value.strip().strip('\"\''))
 
 
@@ -85,7 +85,7 @@ async def evaluate(cases,output):
             return result
     try:results=await asyncio.gather(*(one(case) for case in cases))
     finally:server.shutdown();server.server_close()
-    report={'model':settings.llm_model,'classifier_model':settings.llm_classifier_model or settings.llm_model,'synthetic':True,'cases':len(results),'automated_passed':sum(r['automated_pass'] for r in results),'model_calls':sum(r['model_calls'] for r in results),'manual_review_required':True,'results':results}
+    report={'model':settings.llm_model,'verifier_model':settings.llm_verifier_model or settings.llm_model,'classifier_model':settings.llm_classifier_model or settings.llm_model,'synthetic':True,'cases':len(results),'automated_passed':sum(r['automated_pass'] for r in results),'model_calls':sum(r['model_calls'] for r in results),'manual_review_required':True,'results':results}
     (output/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
     print('TOTAL',report['automated_passed'],'/',len(results),'automated checks; manual review required.',flush=True)
 

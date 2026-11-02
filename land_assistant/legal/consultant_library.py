@@ -49,6 +49,9 @@ class ConsultantLibrary:
                 frequency=Counter(word for item in parsed['toc'] for word in terms(item['title']))
                 for item in parsed['toc']:
                     title_words=terms(item['title']);score=sum(math.log(1+(len(parsed['toc'])+1)/(frequency[word]+1)) for word in words & title_words)/(1+.02*len(title_words))
+                    if legal_topic=='family' and 'алиментов' in query and 'несовершеннолетних детей' in query:
+                        number=re.search(r'Статья\s+(\d+)',item['title'])
+                        if number and number.group(1) in ('80','81','83'):score+=1000-10*('80','81','83').index(number.group(1))
                     if legal_topic=='consumer' and re.search(r'недостат|отсутствие.*чека',query,re.I):
                         number=re.search(r'Статья\s+(\d+)',item['title'])
                         if number and number.group(1) in ('18','19','22'):score+=1000-10*('18','19','22').index(number.group(1))

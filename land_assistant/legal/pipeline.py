@@ -4,7 +4,7 @@ import logging
 import time
 import uuid
 from .errors import LegalError
-from .answer_evidence import public_evidence,validate_claim_sections
+from .answer_evidence import public_evidence,validate_claim_sections,salvage_verified_sections
 from .mcp_client import LocalLegalMCP
 from .privacy import has_references, has_unverified_references
 from .task_catalog import ALL_FIELDS,allowed_fields,validate_tasks,normalize_scope,search_query
@@ -192,9 +192,15 @@ class LegalPipeline:
                                     if time.monotonic()>budget.deadline-5:raise SourceError('source_budget_exhausted')
                                     stage='evidence_semantic_check'
                                     async with asyncio.timeout(min(30,max(.1,budget.deadline-time.monotonic()-1))):
-                                        supported=await self.model.verify_evidence(result=result,fragments=fragments,original_question=question,formulation=task['formulation'])
+                                        supported=await self.model.verify_evidence(result=result,fragments=fragments,original_question=question,formulation=task['formulation'],intake=intake)
                                     trace.append('evidence.semantic_check')
-                                    if not supported:raise LegalError('unsupported_claims')
+                                    if not supported:
+                                        # Return an approved useful subset before another paid call
+                                        # can time out and discard those already checked sections.
+                                        salvaged=salvage_verified_sections(result,fragments,scope=normalize_scope(task['scope']))
+                                        if salvaged:
+                                            result=salvaged;validate_answer(result,fragments,scope=task['scope']);trace.append('evidence.partial_salvage');break
+                                        raise LegalError('unsupported_claims')
                                     validate_claim_sections(result,fragments)
                                     break
                                 except LegalError as exc:
@@ -203,7 +209,9 @@ class LegalPipeline:
                                     repair=getattr(self.model,'repair_grounding',self.model.rewrite_answer)
                                     result=await repair(draft=result,**arguments)
                                     validate_answer(result,fragments,scope=task['scope'])
-                                    if result.get('status')=='insufficient_sources':raise LegalError('unsupported_claims')
+                                    if result.get('status')=='insufficient_sources':break
+                        if result.get('status')=='insufficient_sources':
+                            unanswered=True;outcomes.append({'task_id':task['task_id'],'status':'insufficient_sources','summary':task['formulation'][:200]+': после проверки подтверждённых оснований недостаточно.'});continue
                         if getattr(self.model,'require_legal_bases',False) and not result.get('legal_bases'):raise LegalError('invalid_legal_bases')
                         # Only now commit a task's checked result. Failed later tasks cannot erase it.
                         text=result['answer'];citations=list(result['citations']);is_partial=result.get('status')=='partial_answer'

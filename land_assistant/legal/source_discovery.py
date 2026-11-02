@@ -41,11 +41,14 @@ class VerifiedSourceLibrary:
         for url,parts in groups.items():
             f=parts[0]
             self.index.upsert(VerifiedDocument(url,f['title'],'ФНС России' if f.get('source_kind')=='official_explanation' else 'КонсультантПлюс',f.get('source_kind','normative_act'),'guidance' if f.get('source_kind')=='official_explanation' else 'current',f['version'],f['last_checked_at'],[{'text':p['text'],'citation':p.get('citation',''),'partial':p.get('partial',False),'scope_note':p.get('scope_note',''),'act_designation':p.get('act_designation','')} for p in parts]))
-        if found and not self.covered(query,legal_topic,[self.library.read(f['id'],as_of_date) for f in found]):self.coverage_gaps=['Не найдены все основания о правах при недостатках товара и подтверждении покупки.']
+        if found and not self.covered(query,legal_topic,[self.library.read(f['id'],as_of_date) for f in found]):self.coverage_gaps=['Не найдены все необходимые основания по текущей теме; ответ ограничен прочитанной частью.']
         self.allowed_ids={f['id'] for f in found}
         return found
     @staticmethod
     def covered(query,topic,fragments):
+        if topic=='family' and 'алиментов' in query and 'несовершеннолетних детей' in query:
+            numbers={m.group(1) for f in fragments if (m:=re.search(r'Статья\s+(\d+)(?!\d|\.\d)',f.get('citation',''),re.I))}
+            return {'80','81','83'}<=numbers
         if topic!='consumer' or not re.search(r'недостат|отсутствие.*чек',query,re.I):return True
         rights=[f for f in fragments if re.search(r'Статья\s+18(?!\d|\.\d)',f.get('citation',''),re.I)]
         if not rights:return False

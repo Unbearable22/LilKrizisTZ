@@ -43,7 +43,10 @@ TOPIC_RULES={
 'tax':[(r'ставк','налоговая ставка'),(r'вычет','налоговые вычеты'),(r'льгот','налоговые льготы')]}
 DEFAULT_QUERY={'land':'защита прав на земельные участки','inheritance':'наследование','labor':'права работника трудовой договор','family':'семейные права','consumer':'защита прав потребителей','housing':'жилищные права','civil':'защита гражданских прав договор','tax':'налоговые обязательства','administrative':'административная ответственность','criminal':'уголовная ответственность','procedure':'судебная защита','other_legal':'защита гражданских прав'}
 def search_query(formulation,topic):
+    formulation=formulation.replace("ё","е").replace("Ё","Е")
     # Only canonical legal phrases leave the host. No arbitrary client token does.
+    if topic=='family' and re.search(r'алимент',formulation,re.I) and re.search(r'ребен|дет|несовершеннолет',formulation,re.I):
+        return 'обязанности родителей по содержанию несовершеннолетних детей размер алиментов взыскиваемых на несовершеннолетних детей взыскание алиментов в твердой денежной сумме'
     if topic=='tax' and re.search(r'прода|продаж|отчужден',formulation.lower()):
         return 'налог на доходы физических лиц продажа недвижимости освобождение доходов от налогообложения особенности продажи недвижимого имущества имущественные налоговые вычеты налоговые ставки'
     if topic=='civil' and re.search(r'прода|продаж|купл',formulation.lower()):

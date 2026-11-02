@@ -60,3 +60,30 @@ class VerifiedPipelineTests(unittest.TestCase):
   with patch.object(p,'context_for_task',AsyncMock(return_value={'prompt':'Правила','fragments':[{'id':'f','title':'Прочитанный документ','text':'Норма об оплате труда.','demo':False}],'trace':[]})),patch.object(p,'fallback_context',AsyncMock(return_value={'fragments':[],'trace':[]})) as fallback:
    r=asyncio.run(p.run('Не платят зарплату',{}))
   self.assertEqual(r['status'],'partial_answer');fallback.assert_not_awaited()
+ def test_repair_cannot_find_grounds_is_insufficient_not_technical_error(self):
+  class Model(DemoModel):
+   require_grounded_claims=True
+   async def classify(self,*a,**kw):return {'tasks':[{'task_id':'x','function_id':'general_legal_help','formulation':'зарплата','legal_topic':'labor','scope':'general'}]}
+   async def verify_evidence(self,**kw):return False
+   async def rewrite_answer(self,**kw):raise AssertionError('content repair must be used')
+   async def repair_grounding(self,**kw):return {'status':'insufficient_sources','answer':'Недостаточно норм.','citations':[],'limitations':[]}
+  p=LegalPipeline('knowledge',Model(),False)
+  with patch.object(p,'context_for_task',AsyncMock(return_value={'prompt':'Правила','fragments':[{'id':'f','title':'Документ об оплате','text':'Норма об оплате труда.','demo':False}],'trace':[]})):
+   r=asyncio.run(p.run('Не платят зарплату',{}))
+  self.assertEqual(r['status'],'insufficient_sources');self.assertEqual(r['task_outcomes'][0]['status'],'insufficient_sources')
+ def test_pipeline_preserves_only_individually_verified_variants(self):
+  from land_assistant.legal.answer_evidence import prepare_claims
+  class Model(DemoModel):
+   require_grounded_claims=True
+   checks=0
+   async def classify(self,*a,**kw):return {'tasks':[{'task_id':'x','function_id':'general_legal_help','formulation':'Возврат товара','legal_topic':'consumer','scope':'individual'}]}
+   async def answer(self,**kw):return {'status':'partial_answer','answer':'Неподтвержденное обещание.','citations':['f'],'limitations':[],'missing_fields':[],'scenarios':[{'condition':'в любом случае','outcome':'Неподтвержденное обещание.','citations':['f']},{'condition':'чек отсутствует','outcome':'это не является основанием для отказа','citations':['f']}]}
+   async def verify_evidence(self,*,result,fragments,**kw):
+    self.checks+=1;result['claims']=prepare_claims(result,fragments);result['_verified_sections']=['scenario:1'];return False
+   async def rewrite_answer(self,*,draft,**kw):return draft
+   async def repair_grounding(self,*,draft,**kw):raise AssertionError('approved sections must survive without another paid repair')
+  m=Model();p=LegalPipeline('knowledge',m,False)
+  f={'id':'f','title':'Проверяемый документ','citation':'Статья 18','text':'Отсутствие чека не является основанием для отказа.','demo':False}
+  with patch.object(p,'context_for_task',AsyncMock(return_value={'prompt':'Правила','fragments':[f],'trace':[]})):
+   r=asyncio.run(p.run('Можно ли вернуть товар?',{}))
+  self.assertEqual(r['status'],'partial_answer');self.assertNotIn('Неподтвержденное обещание',r['answer']);self.assertEqual(m.checks,1)

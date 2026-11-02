@@ -50,3 +50,62 @@ def validate_claim_sections(result,fragments):
     expected={'answer':result['answer']}
     for i,branch in enumerate(result.get('scenarios',[])):expected['scenario:'+str(i)]=branch['condition']+' → '+branch['outcome']
     if len(claims)!=len(expected) or {c['section'] for c in claims}!=set(expected) or any('text' in c and c['text']!=expected[c['section']] for c in claims):raise LegalError('invalid_claim_coverage')
+
+
+def prepare_claims(result,fragments):
+    """Select verbatim evidence mechanically; the model must still judge its support."""
+    from .knowledge import terms
+    available={f['id']:f for f in fragments}
+    sections=[('answer',result.get('answer',''),result.get('citations',[]))]
+    sections.extend(('scenario:'+str(i),b['condition']+' → '+b['outcome'],b.get('citations',[])) for i,b in enumerate(result.get('scenarios',[])))
+    claims=[]
+    for section,text,ids in sections:
+        if not isinstance(ids,list):continue
+        ids=list(dict.fromkeys(i for i in ids if isinstance(i,str) and i in available))[:6]
+        anchors=[];candidates=[]
+        for fid in ids:
+            body=available[fid]['text']
+            paragraphs=[line.strip() for line in body.splitlines() if 15<=len(line.strip())<=2000]
+            if not paragraphs:paragraphs=[m.group().strip() for m in re.finditer(r'[^\n!?;]+[!?;]?',body) if 15<=len(m.group().strip())<=2000]
+            content=[p for p in paragraphs if not re.match(r'^(?:#{1,6}\s*)?(?:Статья|Глава)\s+\d',p)]
+            candidates.extend((fid,p) for p in (content or paragraphs))
+        # Each sentence gets a candidate before a long secondary topic can dominate.
+        sentences=[part for part in re.split(r'(?<=[.!?])\s+|\n+',text) if len(terms(part))>=2]
+        seen=set()
+        for sentence in sentences or [text]:
+            if not candidates or len(anchors)>=6:break
+            query=terms(sentence)
+            fid,quote=max(candidates,key=lambda row:(len(query & terms(row[1]))/(1+.001*len(row[1])),len(row[1])))
+            if (fid,quote) not in seen:
+                anchors.append({'fragment_id':fid,'quote':quote});seen.add((fid,quote))
+        if anchors:claims.append({'section':section,'evidence_ids':list(dict.fromkeys(a['fragment_id'] for a in anchors)),'anchors':anchors})
+    return claims
+
+
+def salvage_verified_sections(draft,fragments,*,scope):
+    """Keep only unchanged sections explicitly approved by the semantic verifier."""
+    validate_claim_sections(draft,fragments)
+    verified=set(draft.get('_verified_sections',[]))
+    old_claims={c['section']:c for c in draft['claims']}
+    branches=[];claims=[]
+    for i,branch in enumerate(draft.get('scenarios',[])):
+        section='scenario:'+str(i)
+        if section not in verified or section not in old_claims:continue
+        claims.append({**old_claims[section],'section':'scenario:'+str(len(branches))})
+        branches.append(branch)
+    keep_answer='answer' in verified
+    if not branches and not (keep_answer and scope=='general'):return None
+    ids=list(dict.fromkeys([c for branch in branches for c in branch['citations']]+(draft.get('citations',[]) if keep_answer else [])))
+    if not ids:return None
+    if keep_answer:
+        text=draft['answer'];main=old_claims['answer']
+    else:
+        text='Подтверждены приведённые ниже условные варианты. Остальную часть вопроса подтвердить не удалось.'
+        main={**claims[0],'section':'answer'}
+    available={f['id']:f for f in fragments}
+    # Explanations from rejected sections are never copied into the public answer.
+    result={'status':'partial_answer' if branches else 'answered','answer':text,'citations':ids,'limitations':['Ответ ограничен подтверждённой частью; остальные выводы не включены.'],'legal_bases':[{'fragment_id':fid,'explanation':'Нормативное основание для подтверждённой части ответа.'} for fid in ids[:6]],'claims':[{**main,'section':'answer'},*claims]}
+    if branches:result.update(scenarios=branches,missing_fields=draft.get('missing_fields',[]))
+    if any(fid not in available for fid in ids):raise LegalError('invalid_citations')
+    validate_claim_sections(result,fragments)
+    return result

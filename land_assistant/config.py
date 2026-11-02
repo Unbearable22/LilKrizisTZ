@@ -23,6 +23,7 @@ class Settings:
     llm_classifier_model: str = ''
     llm_answer_tokens: int = 6144
     consultant_cache_dir: Path = Path("data/consultant-cache")
+    llm_verifier_model: str = ''
 
     @classmethod
     def from_env(cls):
@@ -38,4 +39,5 @@ class Settings:
                    min(90,max(5,float(os.getenv('LLM_ANSWER_TIMEOUT','60')))),
                    os.getenv('LLM_CLASSIFIER_MODEL',''),
                    min(12000,max(1024,int(os.getenv('LLM_ANSWER_TOKENS','6144')))),
-                   Path(os.getenv('CONSULTANT_CACHE_DIR','data/consultant-cache')))
+                   Path(os.getenv('CONSULTANT_CACHE_DIR','data/consultant-cache')),
+                   os.getenv('LLM_VERIFIER_MODEL',''))

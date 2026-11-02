@@ -34,3 +34,8 @@ class DiscoveryTests(unittest.TestCase):
   f={'citation':'Статья 18. Права потребителя','text':'Потребитель вправе потребовать возврата. Отсутствие чека не является основанием для отказа.'}
   self.assertTrue(VerifiedSourceLibrary.covered('недостатки отсутствие кассового чека','consumer',[f]))
   self.assertFalse(VerifiedSourceLibrary.covered('недостатки','consumer',[{**f,'citation':'Статья 18.1. Иная норма'}]))
+ def test_child_alimony_query_and_coverage_do_not_use_divorce_or_parentage_only(self):
+  from land_assistant.legal.task_catalog import search_query
+  q=search_query('Разводимся, алименты на ребенка, место работы отца неизвестно','family')
+  self.assertIn('твердой',search_query('Алименты на ребёнка, доход неизвестен','family'));self.assertIn('содержанию',q);self.assertIn('твердой',q);self.assertNotIn('происхождения',q)
+  self.assertFalse(VerifiedSourceLibrary.covered(q,'family',[{'citation':'Статья 90. Алименты бывшему супругу','text':'Алиментные отношения.'}]))
