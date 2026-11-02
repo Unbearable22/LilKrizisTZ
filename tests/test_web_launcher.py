@@ -17,3 +17,9 @@ class LauncherTests(unittest.TestCase):
    p=Path(d)/'.env';p.write_text('LLM_API_KEY="private\n')
    with self.assertRaises(ValueError) as e:launcher.load_env(p)
    self.assertNotIn('private',str(e.exception));self.assertIn('1',str(e.exception))
+ def test_auto_port_avoids_other_app_and_reuses_our_server(self):
+  with patch.object(launcher,'port_occupied',side_effect=lambda p:p==8080),patch.object(launcher,'app_running',return_value=False):
+   self.assertEqual(launcher.choose_endpoint(8080,True),(8081,False))
+   with self.assertRaises(ValueError):launcher.choose_endpoint(8080,False)
+  with patch.object(launcher,'port_occupied',return_value=True),patch.object(launcher,'app_running',side_effect=lambda url:url.endswith(':8081')):
+   self.assertEqual(launcher.choose_endpoint(8080,True),(8081,True))

@@ -64,12 +64,25 @@ def app_running(url):
     except Exception:
         return False
 
+def port_occupied(port):
+    with socket.socket() as probe:
+        return probe.connect_ex(('127.0.0.1', port)) == 0
+
+def choose_endpoint(port, auto=False):
+    for candidate in range(port, min(port + (20 if auto else 1), 65536)):
+        if not port_occupied(candidate):
+            return candidate, False
+        if app_running(f'http://127.0.0.1:{candidate}'):
+            return candidate, True
+    raise ValueError(f'No available web port starting from {port}. Close another application or choose --port.')
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Start GROUNDandLAW web chat and open the browser.')
     parser.add_argument('--demo', action='store_true', help='Run without LLM API calls.')
     parser.add_argument('--no-speech', action='store_true', help='Skip local Whisper installation.')
     parser.add_argument('--no-browser', action='store_true')
     parser.add_argument('--port', type=int, default=8080)
+    parser.add_argument('--auto-port', action='store_true', help='Choose another port automatically when busy.')
     args = parser.parse_args(argv)
     if not 1 <= args.port <= 65535:
         raise ValueError('Port must be between 1 and 65535.')
@@ -79,12 +92,9 @@ def main(argv=None):
         if not (ROOT / '.env').exists():
             (ROOT / '.env').write_bytes((ROOT / '.env.example').read_bytes())
         raise ValueError('Fill LLM_URL, LLM_API_KEY and LLM_MODEL in .env, then run again. Use --demo for a demonstration without API.')
+    args.port, running = choose_endpoint(args.port, args.auto_port)
     url = f'http://127.0.0.1:{args.port}'
-    with socket.socket() as probe:
-        occupied = probe.connect_ex(('127.0.0.1', args.port)) == 0
-    if occupied:
-        if not app_running(url):
-            raise ValueError(f'Port {args.port} is used by another application. Use --port 8081.')
+    if running:
         print(f'Web chat is already running: {url}')
         if not args.no_browser:
             webbrowser.open(url)
