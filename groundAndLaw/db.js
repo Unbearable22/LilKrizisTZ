@@ -116,7 +116,7 @@ const ChatDB = (() => {
 
     // ============ CHATS ============
     async function saveChat(chat) {
-        const toStore = { ...chat, updatedAt: Date.now() };
+        const toStore = { ...LegalPrivacy.cleanChat(chat), updatedAt: Date.now() };
         await withStore(STORE_CHATS, 'readwrite', (store) => store.put(toStore));
     }
 
@@ -124,7 +124,7 @@ const ChatDB = (() => {
         const db = await open();
         const tx = db.transaction(STORE_CHATS, 'readonly');
         const store = tx.objectStore(STORE_CHATS);
-        return await requestToPromise(store.get(id));
+        return LegalPrivacy.cleanChat(await requestToPromise(store.get(id)));
     }
 
     async function getAllChats() {
@@ -132,8 +132,12 @@ const ChatDB = (() => {
         const tx = db.transaction(STORE_CHATS, 'readonly');
         const store = tx.objectStore(STORE_CHATS);
         const all = await requestToPromise(store.getAll());
+        // Remove legacy private metadata from stored history, not only its rendering.
+        const cleaned=all.map(chat=>LegalPrivacy.cleanChat(chat));
+        const changed=cleaned.filter((chat,index)=>JSON.stringify(chat)!==JSON.stringify(all[index]));
+        if(changed.length)await withStore(STORE_CHATS,'readwrite',store=>{for(const chat of changed)store.put(chat);});
         // Сортировка: свежие сверху
-        return all.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        return cleaned.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     }
 
     async function deleteChat(id) {

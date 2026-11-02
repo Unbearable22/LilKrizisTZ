@@ -629,3 +629,31 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: #b0b4bc; }
 
 .hidden { display: none !important; }
+
+/* Legal-help prototype: retain the original chat, add mode, intake and provenance. */
+.main { position: relative; }
+.legal-mode { position: absolute; z-index: 5; top: 12px; left: 24px; right: 24px; padding: 10px 14px; border: 1px solid #c7d9cd; border-radius: 10px; background: #f0f8f3; color: #264937; font-size: 12px; line-height: 1.5; }
+.legal-mode[data-mode="demo"] { background: #fff8e7; border-color: #e4d7ad; color: #665118; }
+.legal-mode[data-mode="error"] { background: #fff0ee; border-color: #e4bbb4; color: #782e22; }
+.chat-messages { padding-top: 95px; }
+.message-bubble > div:first-child { white-space: pre-wrap; overflow-wrap: anywhere; }
+.legal-status { font-size: 12px; color: #627367; margin: 10px 0; }
+.legal-action { margin: 10px 8px 0 0; padding: 10px 14px; border: 1px solid #b4cbbd; border-radius: 8px; background: #edf6f0; color: #254d35; font: inherit; cursor: pointer; }
+.legal-action:disabled { opacity: .5; cursor: wait; }
+.legal-intake { display: grid; gap: 14px; margin-top: 14px; }
+.legal-intake label { display: grid; gap: 6px; font-size: 13px; line-height: 1.5; }
+.legal-intake textarea { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #b7c9be; border-radius: 8px; font: inherit; resize: vertical; min-height: 65px; color: #213d2c; background: #fff; }
+.legal-source { border-left: 3px solid #82ad93; margin: 12px 0; padding: 4px 12px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.legal-source a { color: #24683e; }
+.legal-limitations { font-size: 12px; line-height: 1.6; color: #665637; }
+.message-bubble details { margin-top: 15px; color: #526458; font-size: 11px; }
+.message-bubble pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.action-btn:disabled { opacity: .35; cursor: not-allowed; }
+@media(max-width: 700px) { .legal-mode { left: 12px; right: 12px; font-size: 11px; } .chat-messages { padding-top: 125px; } }
+
+.legal-source-date, .legal-task-outcome {font-size: .85rem; line-height: 1.5; color: #52665e; margin-top: 12px;}
+
+.voice-feedback {font-size:13px;color:var(--text-secondary, #53615c);padding:4px 12px;}
+.voice-feedback:has(span:empty) {display:none;}
+.voice-feedback button {margin-left:10px;cursor:pointer;}
+[data-voice][aria-pressed="true"] {color:#cf3434;background:#ffe6e6;}

@@ -1,0 +1,27 @@
+[
+  {
+    "file": "gpk_01.md",
+    "before_sha256": "08d8d160141e3d769ab4beb47adf571c9fb2a7ba092c69add767c44a138133a6",
+    "after_sha256": "edc741ef296675a658873cb3832653dc27c4aefd573bc3af704cdebe34c54e94",
+    "old": "26.12.2014 N 457-ФЗ",
+    "new": "29.12.2014 N 457-ФЗ",
+    "occurrences": 2,
+    "scope": "Дата изменяющего акта в преамбуле и примечании к части 5 статьи 61; сам текст нормы не изменялся.",
+    "evidence": {
+      "document_url": "https://www.szrf.ru/api/issues/document?volid=1002015001010&nd=10",
+      "publication": {
+        "name": "О внесении изменений в отдельные законодательные акты Российской Федерации",
+        "volid": "1002015001010",
+        "nd": 10,
+        "weight": "1",
+        "baseid": "100",
+        "hash": "ad6ce2dcdace5908b938e7d29b8a2502f4428d41debfa6786c60839aec1927a2",
+        "article": 10,
+        "adoption": "Федеральный закон от 29.12.2014 № 457-ФЗ",
+        "position": 10,
+        "pagenumber": 23,
+        "existpdf": 1
+      }
+    }
+  }
+]

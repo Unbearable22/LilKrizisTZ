@@ -167,6 +167,34 @@ class AssistantTests(unittest.TestCase):
         self.service.update_case(self.cid,10,{'height_m':100})
         with self.assertRaises(ValueError):integration.concept(self.cid,10,'building')
 
+    def test_nspd_urban_manual_workflow_and_private_contour(self):
+        from land_assistant.integrations import Integrations
+        integration=Integrations(Settings(Path(self.tmp.name)),self.service)
+        with patch('land_assistant.integrations.request_json') as request:
+            result=integration.nspd(self.cid,10)
+            request.assert_not_called()
+        self.assertEqual(result['status'],'manual_action_required')
+        self.assertEqual(result['service_url'],'https://nspd.gov.ru/urban-analyze')
+        geojson=result['contour_geojson']
+        ring=geojson['features'][0]['geometry']['coordinates'][0]
+        self.assertEqual(ring[0],ring[-1])
+        self.assertEqual(len(ring),5)
+        self.assertEqual(geojson['features'][0]['properties'],{})
+        self.assertNotIn('ДЕМОНСТРАЦИОННЫЙ КЛИЕНТ',json.dumps(geojson,ensure_ascii=False))
+        cid=self.service.create_case(10,{'client':'Тест','address':'Адрес','purpose':'housing'})
+        self.assertIsNone(integration.nspd(cid,10)['contour_geojson'])
+        with self.assertRaises(ValueError):integration.nspd(self.cid,99)
+
+    def test_telegram_nspd_sends_uploadable_geojson(self):
+        bot=Telegram(Settings(Path(self.tmp.name),allowed_users=(10,)),self.service)
+        messages,files=[],[]
+        bot.say=lambda owner,text:messages.append(text)
+        bot.send_file=lambda owner,name,data:files.append((name,json.loads(data)))
+        bot.handle({'message':{'from':{'id':10},'chat':{'id':10,'type':'private'},'text':f'/nspd {self.cid}'}})
+        self.assertIn('https://nspd.gov.ru/urban-analyze',messages[0])
+        self.assertTrue(files[0][0].endswith('.geojson'))
+        self.assertEqual(files[0][1]['type'],'FeatureCollection')
+
     def test_untrusted_rule_never_activated(self):
         p=example('rule.demo.json');p['version']='unreviewed';p.pop('verified_by')
         self.service.import_rule(p)

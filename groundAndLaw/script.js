@@ -134,6 +134,7 @@ async function createChat(firstMessage, attachments = []) {
         title: title || 'Новый чат',
         messages: [{
             role: 'user',
+            id: generateChatId(),
             text: firstMessage,
             attachments: savedAttachments
         }],
@@ -169,6 +170,7 @@ async function closeChat(id) {
     if (index === -1) return;
 
     const chat = state.chats[index];
+    legalClient.cancel(id);
     state.chats.splice(index, 1);
 
     // Удаляем чат из БД
@@ -243,12 +245,15 @@ function renderMessages(chat) {
             bubbleEl.appendChild(attWrap);
         }
 
+        if (msg.legal) renderLegalMessage(bubbleEl, chat, msg);
+
         el.appendChild(avatarEl);
         el.appendChild(bubbleEl);
         container.appendChild(el);
     });
 
     container.scrollTop = container.scrollHeight;
+    document.getElementById('chatSendBtn').disabled = !legalReady || legalClient.busy(chat.id);
 }
 
 // ===== ДОБАВЛЕНИЕ СООБЩЕНИЯ =====
@@ -270,7 +275,7 @@ async function appendMessage(chatId, text) {
         }
     }
 
-    chat.messages.push({ role: 'user', text, attachments: savedAttachments });
+    chat.messages.push({ role: 'user', id: generateChatId(), text, attachments: savedAttachments });
     chat.attachments = [];
     chat.updatedAt = Date.now();
 
@@ -355,6 +360,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 350);
     }
 
+    await connectLegal();
     renderChatList();
     setTimeout(() => document.getElementById('startInput')?.focus(), 100);
 
@@ -363,6 +369,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const startSendBtn = document.getElementById('startSendBtn');
 
     async function sendFromStart() {
+        if (!legalReady) return;
         const text = startInput.value.trim();
         if (!text && pendingAttachments.length === 0) return;
 
@@ -380,6 +387,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderMessages(chat);
             refreshChatAttachments();
             router.navigate('/chat');
+            startLegal(chat, chat.messages[0]);
         } catch (err) {
             console.error('Ошибка создания чата:', err);
             alert('Не удалось сохранить чат. Попробуйте ещё раз.');
@@ -401,6 +409,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const chatSendBtn = document.getElementById('chatSendBtn');
 
     async function sendFromChat() {
+        if (!legalReady || legalClient.busy(state.activeChatId)) return;
         const text = chatInput.value.trim();
         const chat = state.chats.find(c => c.id === state.activeChatId);
         const hasAttachments = chat && chat.attachments && chat.attachments.length > 0;
@@ -409,14 +418,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         chatSendBtn.disabled = true;
         try {
-            await appendMessage(state.activeChatId, text);
+            const targetChat = chat;
+            await appendMessage(targetChat.id, text);
+            startLegal(targetChat, targetChat.messages[targetChat.messages.length-1]);
             chatInput.value = '';
             chatInput.style.height = 'auto';
         } catch (err) {
             console.error('Ошибка сохранения сообщения:', err);
             alert('Не удалось сохранить сообщение.');
         } finally {
-            chatSendBtn.disabled = false;
+            chatSendBtn.disabled = !legalReady || legalClient.busy(state.activeChatId);
         }
     }
 
@@ -476,3 +487,154 @@ document.addEventListener('DOMContentLoaded', async () => {
         history.replaceState({ path: '/' }, '', '/');
     }
 });
+
+
+// ===== ЮРИДИЧЕСКАЯ ПОМОЩЬ: сервер → файловый MCP → ответ =====
+let legalReady = false;
+let legalMode = 'unknown';
+const legalClient = new LegalClient({
+    onState(chatId, busy) {
+        if (state.activeChatId === chatId) document.getElementById('chatSendBtn').disabled = busy || !legalReady;
+    },
+    async onResult(chatId, requestId, result) {
+        const chat = state.chats.find(item => item.id === chatId);
+        if (!chat) return; // Deleted chat must never be recreated by a late response.
+        const reply = chat.messages.find(item => item.legal?.requestId === requestId);
+        if (!reply) return;
+        LegalPrivacy.finishUpdate(reply, result, requestId);
+        await ChatDB.saveChat(chat);
+        if (state.activeChatId === chatId) renderMessages(chat);
+        renderChatList();
+    }
+});
+
+async function connectLegal() {
+    const banner = document.getElementById('legalMode');
+    try {
+        const response = await fetch('/api/legal-help/config');
+        if (!response.ok) throw new Error('Нет соединения');
+        const config = await response.json();
+        legalMode = config.mode;
+        banner.textContent = config.notice;
+        banner.dataset.mode = legalMode;
+        legalReady = true;
+        // Pending requests do not survive a browser restart. Offer an explicit retry.
+        for (const chat of state.chats) {
+            for (const msg of chat.messages || []) {
+                if (msg.legal?.status === 'pending' || msg.legal?.updating) {
+                    LegalPrivacy.finishUpdate(msg, {status:'error', answer:'Предыдущее ожидание прервано перезагрузкой страницы. Можно повторить запрос.'}, msg.legal.requestId);
+                    await ChatDB.saveChat(chat);
+                }
+            }
+        }
+    } catch (error) {
+        banner.textContent = 'Сервер юридической помощи недоступен. Запустите приложение по инструкции; открытие HTML-файла отдельно не подключает модель.';
+        banner.dataset.mode = 'error';
+    }
+    document.getElementById('startSendBtn').disabled = !legalReady;
+    document.getElementById('chatSendBtn').disabled = !legalReady;
+}
+
+async function startLegal(chat, userMessage, intake) {
+    if (!legalReady || legalClient.busy(chat.id) || !state.chats.includes(chat)) return;
+    if (!userMessage.id) userMessage.id = generateChatId();
+    if (intake) userMessage.intake = intake;
+    let reply = chat.messages.find(item => item.legal?.requestId === userMessage.id);
+    if (!reply) {
+        reply = {role: 'assistant', text: '', attachments: [], legal: {requestId: userMessage.id}};
+        chat.messages.push(reply);
+    }
+    LegalPrivacy.beginUpdate(reply, userMessage.id, legalMode);
+    await ChatDB.saveChat(chat);
+    if (state.activeChatId === chat.id) renderMessages(chat);
+    return legalClient.submit({chatId: chat.id, requestId: userMessage.id, question: userMessage.text,
+        history: LegalPrivacy.chatHistory(chat, userMessage.id), intake: userMessage.intake || {}, attachments: userMessage.attachments || []});
+}
+
+function actionButton(text, handler) {
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'legal-action'; button.textContent = text;
+    button.addEventListener('click', handler);
+    return button;
+}
+
+function renderLegalMessage(container, chat, message) {
+    const data = message.legal;
+    const user = chat.messages.find(item => item.id === data.requestId && item.role === 'user');
+    const status = document.createElement('div');
+    status.className = 'legal-status';
+    const labels = {pending: 'Обработка', answered: 'Готово', partial_answer: 'Предварительный ответ', needs_clarification: 'Нужны исходные сведения',
+        insufficient_sources: 'Недостаточно данных', unsupported: 'Функция не подключена', error: 'Ошибка', invalid_request: 'Проверьте ввод', cancelled: 'Ожидание отменено'};
+    status.textContent = (data.updating ? 'Обновление ответа' : (labels[data.status] || '')) + (data.mode === 'demo' ? ' · Учебный режим, без LLM' : '');
+    container.appendChild(status);
+    if (data.updateFailed) {
+        const notice = document.createElement('p'); notice.className = 'legal-update-notice';
+        notice.textContent = 'Не удалось обновить ответ. Показана предыдущая версия — новые уточнения в ней не учтены.';
+        container.appendChild(notice);
+    }
+    if (data.status === 'pending' || data.updating) {
+        container.appendChild(actionButton('Отменить ожидание', async () => {
+            legalClient.cancel(chat.id); LegalPrivacy.finishUpdate(message, {status:'cancelled',answer:'Ожидание отменено. Автоматический повтор не выполняется.'}, data.requestId);
+            await ChatDB.saveChat(chat); if (state.activeChatId === chat.id) renderMessages(chat);
+        }));
+    }
+    if (['needs_clarification','partial_answer'].includes(data.status) && user && data.missing_fields?.length) {
+        const form = document.createElement('form'); form.className = 'legal-intake';
+        const intro = document.createElement('p');
+        const optional = data.status === 'partial_answer';
+        intro.textContent = optional ? 'Если знаете эти сведения, укажите их для уточнения ответа. Можно заполнить только часть полей или оставить предварительный ответ.' : 'Опишите, с каким вопросом нужна помощь. Достаточно ситуации или желаемого результата.';
+        form.appendChild(intro);
+        for (const field of data.missing_fields) {
+            const label = document.createElement('label'); label.textContent = field.label;
+            const input = document.createElement('textarea');
+            input.name = field.key; input.required = false; input.maxLength = 3000; input.rows = 2;
+            input.value = data.intakeDraft?.[field.key] || user.intake?.[field.key] || (field.key === 'situation' ? user.text : '');
+            input.addEventListener('input', () => {
+                data.intakeDraft = {...(data.intakeDraft || {}), [field.key]: input.value};
+            });
+            label.appendChild(input); form.appendChild(label);
+        }
+        const submit = document.createElement('button'); submit.type = 'submit'; submit.className = 'legal-action'; submit.textContent = optional ? 'Уточнить ответ' : 'Передать сведения и выполнить';
+        form.appendChild(submit);
+        form.addEventListener('submit', event => {
+            event.preventDefault();
+            if (legalClient.busy(chat.id)) return;
+            const intake = {...(user.intake || {})};
+            let changed = false;
+            for (const input of form.querySelectorAll('textarea')) {
+                const value = input.value.trim();
+                if (value && value !== (intake[input.name] || (input.name === 'situation' ? user.text : ''))) { intake[input.name] = value; changed = true; }
+            }
+            if (!changed) { intro.textContent = 'Добавьте хотя бы одно новое сведение. Если ничего не известно, текущий ответ остаётся доступным.'; return; }
+            submit.disabled = true;
+            startLegal(chat, user, intake);
+        });
+        container.appendChild(form);
+    }
+    if ((data.updateFailed || ['error','cancelled','insufficient_sources'].includes(data.status)) && !data.updating && user && !user.attachments?.length) {
+        container.appendChild(actionButton('Повторить запрос', () => startLegal(chat, user)));
+    }
+    if (data.source_checked_at) {
+        const checked = document.createElement('p'); checked.className = 'legal-source-date';
+        checked.textContent = 'Нормативные материалы проверены: ' + new Date(data.source_checked_at).toLocaleString('ru-RU', {timeZone:'Europe/Moscow'});
+        container.appendChild(checked);
+    }
+    const failedTasks = (data.task_outcomes || []).filter(task => ['error','insufficient_sources'].includes(task.status));
+    for (const task of failedTasks) {
+        const note = document.createElement('p'); note.className = 'legal-task-outcome'; note.textContent = 'Не разобрана часть запроса: ' + task.summary; container.appendChild(note);
+    }
+    if (data.legal_bases?.length) {
+        const section = document.createElement('div'); section.className = 'legal-grounds';
+        const heading = document.createElement('strong'); heading.textContent = 'Правовые основания'; section.appendChild(heading);
+        for (const basis of data.legal_bases) {
+            const paragraph = document.createElement('p');
+            paragraph.textContent = `${basis.title}, ${basis.article} — ${basis.explanation}`;
+            section.appendChild(paragraph);
+        }
+        container.appendChild(section);
+    }
+    if (data.limitations?.length) {
+        const limits = document.createElement('p'); limits.className = 'legal-limitations'; limits.textContent = data.limitations.join(' '); container.appendChild(limits);
+    }
+
+}

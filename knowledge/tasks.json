@@ -1,0 +1,20 @@
+{
+  "functions": [
+    {
+      "function_id": "legal_help",
+      "title": "Юридическая помощь",
+      "description": "Правовая справка и объяснение порядка действий по земельным и имущественным вопросам",
+      "mcp": "local-legal-help",
+      "enabled": true,
+      "prompt": "legal_help"
+    },
+    {
+      "function_id": "general_legal_help",
+      "title": "Общая юридическая помощь",
+      "description": "Правовая помощь по другим вопросам права РФ с публичными нормами КонсультантПлюс",
+      "mcp": "consultant-general-legal",
+      "enabled": true,
+      "prompt": "general_legal_help"
+    }
+  ]
+}

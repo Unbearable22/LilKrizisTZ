@@ -1,0 +1,126 @@
+{
+  "roots": [
+    {
+      "id": "civil1",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_5142/",
+      "topics": [
+        "civil",
+        "other_legal",
+        "housing"
+      ],
+      "label": "ГК РФ, часть 1",
+      "enabled": true
+    },
+    {
+      "id": "civil2",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_9027/",
+      "topics": [
+        "civil",
+        "other_legal",
+        "housing"
+      ],
+      "label": "ГК РФ, часть 2",
+      "enabled": true
+    },
+    {
+      "id": "inheritance",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_34154/",
+      "topics": [
+        "inheritance"
+      ],
+      "label": "ГК РФ, часть 3",
+      "enabled": true
+    },
+    {
+      "id": "labor",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_34683/",
+      "topics": [
+        "labor"
+      ],
+      "label": "ТК РФ",
+      "enabled": true
+    },
+    {
+      "id": "family",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_8982/",
+      "topics": [
+        "family"
+      ],
+      "label": "СК РФ",
+      "enabled": true
+    },
+    {
+      "id": "housing",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_51057/",
+      "topics": [
+        "housing"
+      ],
+      "label": "ЖК РФ",
+      "enabled": true
+    },
+    {
+      "id": "tax1",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_19671/",
+      "topics": [
+        "tax"
+      ],
+      "label": "НК РФ, часть 1",
+      "enabled": true
+    },
+    {
+      "id": "tax2",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_28165/",
+      "topics": [
+        "tax"
+      ],
+      "label": "НК РФ, часть 2",
+      "enabled": true
+    },
+    {
+      "id": "administrative",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_34661/",
+      "topics": [
+        "administrative"
+      ],
+      "label": "КоАП РФ",
+      "enabled": true
+    },
+    {
+      "id": "criminal",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_10699/",
+      "topics": [
+        "criminal"
+      ],
+      "label": "УК РФ",
+      "enabled": true
+    },
+    {
+      "id": "procedure",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_39570/",
+      "topics": [
+        "procedure"
+      ],
+      "label": "ГПК РФ",
+      "enabled": true
+    },
+    {
+      "id": "consumer",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_305/",
+      "topics": [
+        "consumer"
+      ],
+      "label": "О защите прав потребителей",
+      "enabled": true
+    },
+    {
+      "id": "enforcement",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_71450/",
+      "topics": [
+        "civil",
+        "procedure"
+      ],
+      "label": "Об исполнительном производстве",
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+# Separate Python 3.12 environment; local CPU speech recognition.
+faster-whisper==1.2.1

@@ -38,5 +38,13 @@ def package(service,cid,owner=None):
         z.writestr('case.json',json.dumps(p,ensure_ascii=False,indent=2))
         if p.get('coordinates'):
             z.writestr('04-parcel-PRELIMINARY.svg',svg(p['coordinates'],p['address']))
+        from .nspd_reports import Reports
+        reports=Reports(service).list(cid,owner)
+        if reports:
+            z.writestr('nspd/materials.json',json.dumps([{**row,'data':{k:v for k,v in row['data'].items() if k!='text'}} for row in reports],ensure_ascii=False,indent=2))
+            for row in reports:
+                z.writestr(f'nspd/report-{row["id"]}-REVIEW.txt',Reports(service).preparation(row['id'],owner))
+                if row['data'].get('artifact'):
+                    z.writestr(f'nspd/report-{row["id"]}-UNVERIFIED.pdf',(service.db.directory/row['data']['artifact']).read_bytes())
         z.writestr('README.txt','Рабочие проекты. Схема не является утверждённой СРЗУ. Формы, проектная документация и юридические выводы требуют проверки специалистом. Изображения не заменяют архитектурный проект и инженерные расчёты.')
     return out.getvalue()

@@ -29,13 +29,15 @@
 
         <!-- ===== ОСНОВНАЯ ОБЛАСТЬ ===== -->
         <main class="main" id="mainContent">
+            <div id="legalMode" class="legal-mode" role="status">Подключение к серверу юридической помощи…</div>
             <!-- Стартовый экран -->
             <div class="start-screen page" id="startScreen">
                 <h1 class="start-title">Чем могу помочь? <span>GROUNDandLAW</span></h1>
                 <div class="input-container">
                     <div class="attachments-preview" id="startAttachments"></div>
+<div class="voice-feedback"><span id="startVoiceStatus" role="status" aria-live="polite"></span><button type="button" id="startVoiceCancel" hidden>Отменить</button></div>
                     <div class="input-row">
-                        <textarea class="input-field" placeholder="Спросите что-нибудь..." rows="1" id="startInput"></textarea>
+                        <textarea class="input-field" placeholder="Опишите юридическую ситуацию и желаемый результат…" maxlength="8000" rows="1" id="startInput"></textarea>
                     </div>
                     <div class="input-row input-row-bottom">
                         <div class="input-actions">
@@ -44,7 +46,7 @@
                                     <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
                                 </svg>
                             </button>
-                            <button class="action-btn" title="Записать голосовое">
+                            <button type="button" class="action-btn" id="startMicBtn" data-voice title="Продиктовать вопрос" aria-label="Запись голосового вопроса" aria-pressed="false">
                                 <svg viewBox="0 0 24 24">
                                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
                                     <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
@@ -69,8 +71,9 @@
                 <div class="chat-input-area">
                     <div class="input-container">
                         <div class="attachments-preview" id="chatAttachments"></div>
+<div class="voice-feedback"><span id="chatVoiceStatus" role="status" aria-live="polite"></span><button type="button" id="chatVoiceCancel" hidden>Отменить</button></div>
                         <div class="input-row">
-                            <textarea class="input-field" placeholder="Напишите сообщение..." rows="1" id="chatInput"></textarea>
+                            <textarea class="input-field" placeholder="Напишите юридический вопрос…" maxlength="8000" rows="1" id="chatInput"></textarea>
                         </div>
                         <div class="input-row input-row-bottom">
                             <div class="input-actions">
@@ -79,7 +82,7 @@
                                         <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
                                     </svg>
                                 </button>
-                                <button class="action-btn" title="Записать голосовое">
+                                <button type="button" class="action-btn" id="chatMicBtn" data-voice title="Продиктовать вопрос" aria-label="Запись голосового вопроса" aria-pressed="false">
                                     <svg viewBox="0 0 24 24">
                                         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
                                         <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
@@ -111,7 +114,9 @@
         <div class="loader-text">Загрузка чатов…</div>
     </div>
 
+    <script src="legal-api.js"></script>
     <script src="db.js"></script>
     <script src="script.js"></script>
+    <script src="voice.js"></script>
 </body>
 </html>

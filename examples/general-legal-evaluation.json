@@ -1,0 +1,117 @@
+{
+  "synthetic": true,
+  "cases": [
+    {
+      "id": "vague",
+      "question": "Мне нужна юридическая помощь, не знаю, с чего начать.",
+      "intake": {},
+      "expected_status": [
+        "needs_clarification"
+      ],
+      "answer_keywords": ""
+    },
+    {
+      "id": "inheritance",
+      "question": "Умерла бабушка, остался участок и квартира. Хочу принять наследство. Документов нет, точную дату смерти пока не знаю.",
+      "intake": {},
+      "expected_status": [
+        "partial_answer"
+      ],
+      "answer_keywords": ""
+    },
+    {
+      "id": "fired",
+      "question": "Меня уволили, не понимаю за что. Приказа у меня нет, дату точно не помню. Что я могу сделать?",
+      "intake": {},
+      "expected_status": [
+        "partial_answer"
+      ],
+      "answer_keywords": ""
+    },
+    {
+      "id": "salary",
+      "question": "Не платят зарплату второй месяц. Сколько точно должны, не посчитал, бумаги на работе. Какие есть варианты?",
+      "intake": {},
+      "expected_status": [
+        "partial_answer"
+      ],
+      "answer_keywords": ""
+    },
+    {
+      "id": "consumer",
+      "question": "Купил телефон, он сломался. Чек потерял, когда купил точно не помню. Можно ли вернуть деньги?",
+      "intake": {},
+      "expected_status": [
+        "partial_answer"
+      ],
+      "answer_keywords": ""
+    },
+    {
+      "id": "family",
+      "question": "Хочу развестись, не уверен, зарегистрирован ли наш брак официально. Есть общий ребёнок. Как действовать в разных вариантах?",
+      "intake": {},
+      "expected_status": [
+        "partial_answer"
+      ],
+      "answer_keywords": ""
+    },
+    {
+      "id": "housing",
+      "question": "Снимаю квартиру без письменного договора. Хозяин выгоняет и не возвращает залог. Какие варианты, если у меня только переписка?",
+      "intake": {
+        "party_role": "Наниматель",
+        "documents": "Переписка о найме и залоге, переводы денег"
+      },
+      "expected_status": [
+        "partial_answer"
+      ],
+      "answer_keywords": ""
+    },
+    {
+      "id": "debt",
+      "question": "Знакомый не возвращает деньги. Давал около 15 тысяч, расписки не помню, есть переписка. Что можно предпринять?",
+      "intake": {},
+      "expected_status": [
+        "partial_answer"
+      ],
+      "answer_keywords": ""
+    },
+    {
+      "id": "mixed",
+      "question": "После бабушки остался участок: как принять наследство? И можно ли потом построить на нём жилой дом? Категорию земли и вид использования не знаю.",
+      "intake": {},
+      "expected_status": [
+        "partial_answer"
+      ],
+      "answer_keywords": ""
+    },
+    {
+      "id": "history",
+      "question": "Уточнил: это договор подряда, не трудовой. Работы сдал, деньги не выплатили. Какие теперь варианты?",
+      "intake": {
+        "documents": "Есть договор и переписка о сдаче работ"
+      },
+      "expected_status": [
+        "partial_answer"
+      ],
+      "answer_keywords": "",
+      "history": [
+        {
+          "text": "Мне не платят зарплату, думаю, я работник организации",
+          "intake": {
+            "party_role": "Работник, предположение"
+          }
+        }
+      ]
+    },
+    {
+      "id": "weather",
+      "question": "Какая погода завтра в Москве?",
+      "intake": {},
+      "expected_status": [
+        "unsupported"
+      ],
+      "answer_keywords": ""
+    }
+  ]
+}

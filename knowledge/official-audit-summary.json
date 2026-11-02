@@ -1,0 +1,109 @@
+{
+  "audit_date": "2026-10-21",
+  "status": "partial_official_evidence",
+  "full_official_verification": false,
+  "unique_acts": 504,
+  "publications_downloaded_and_hash_checked": 504,
+  "scope": "Первоначальные акты и перечни поправок из импортированных редакций; полнота перечней независимо не доказана. Консолидированный текст по всем нормам и датам не восстановлен и не сверен.",
+  "laws": {
+    "zk": {
+      "declared_acts_including_original": 226,
+      "publications_downloaded": 226,
+      "full_text_comparison": "not_completed"
+    },
+    "grad": {
+      "declared_acts_including_original": 195,
+      "publications_downloaded": 195,
+      "full_text_comparison": "not_completed"
+    },
+    "gpk": {
+      "declared_acts_including_original": 135,
+      "publications_downloaded": 135,
+      "full_text_comparison": "not_completed"
+    },
+    "agro": {
+      "declared_acts_including_original": 49,
+      "publications_downloaded": 49,
+      "full_text_comparison": "not_completed"
+    },
+    "snt": {
+      "declared_acts_including_original": 14,
+      "publications_downloaded": 14,
+      "full_text_comparison": "not_completed"
+    }
+  },
+  "corrections_file": "knowledge/official-corrections.json",
+  "evidence_directory": "data/legal-audit/2026-10-21",
+  "report": "docs/legal-publication-audit.md",
+  "official_consolidated_access": "timeout from current environment; archive szrf.ru accessible",
+  "remaining": [
+    "Независимо доказать полноту изменений, в том числе опубликованных после дат редакций.",
+    "Получить официальные консолидированные редакции либо восстановить их из официальных актов с проверкой переходных положений.",
+    "Сопоставить все структурные единицы и текст норм, проверить даты применения."
+  ],
+  "paragraph_comparison": {
+    "zk": {
+      "paragraphs_checked": 2000,
+      "textually_matched": 1184,
+      "needs_review": 816
+    },
+    "grad": {
+      "paragraphs_checked": 2773,
+      "textually_matched": 1381,
+      "needs_review": 1392
+    },
+    "gpk": {
+      "paragraphs_checked": 2096,
+      "textually_matched": 1708,
+      "needs_review": 388
+    },
+    "agro": {
+      "paragraphs_checked": 233,
+      "textually_matched": 150,
+      "needs_review": 83
+    },
+    "snt": {
+      "paragraphs_checked": 522,
+      "textually_matched": 378,
+      "needs_review": 144
+    }
+  },
+  "paragraph_comparison_method": "Exact substring matching with whitespace removed only, against the original and declared amending publications for each law. Matches establish textual occurrence, not applicability or correct consolidation. Unmatched passages are review candidates, not proven errors. Editorial amendment notes removed from candidate paragraphs.",
+  "targeted_reconstruction": {
+    "checked": 4,
+    "matched": 4,
+    "full_amendment_chain_verified": false
+  },
+  "latest_available_official_archive_issue": "2026-10-05",
+  "uncovered_requested_interval": [
+    "2026-10-06",
+    "2026-10-21"
+  ],
+  "snt_353_required_wording": {
+    "checks": 36,
+    "present": 36,
+    "scope": "Наличие предписанных формулировок в целевой статье; не проверка всех удалений, положения нормы и последующих поправок."
+  },
+  "independent_amendment_discovery": {
+    "requested_from": "2025-08-01",
+    "requested_to": "2026-10-21",
+    "latest_available_issue": "2026-10-05",
+    "metadata_records": 8947,
+    "federal_acts_scanned": 572,
+    "federal_acts_selected": 572,
+    "outside_chain_candidates": 15,
+    "future_direct_amendments": 2,
+    "related_act_candidates": 9,
+    "cross_reference_candidates": 4,
+    "proof_of_full_completeness": false,
+    "evidence_file": "data/legal-audit/2026-10-21/amendment-discovery.json"
+  },
+  "reference_policy": {
+    "primary": "КонсультантПлюс (consultant.ru)",
+    "secondary": "Гарант",
+    "on_disagreement": "use_consultant_for_same_effective_date_and_log_difference",
+    "full_comparison_under_policy_completed": true,
+    "implementation": "Normative files aligned to Consultant; automatic updater not implemented",
+    "current_reference_report": "knowledge/reference-audit-summary.json"
+  }
+}

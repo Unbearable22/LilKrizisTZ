@@ -2,6 +2,8 @@ import base64
 import json
 from .network import request_json
 
+NSPD_URBAN_URL = 'https://nspd.gov.ru/urban-analyze'
+
 class Integrations:
     def __init__(self, settings, service):
         self.settings,self.service=settings,service
@@ -9,11 +11,32 @@ class Integrations:
     def nspd(self,cid,owner):
         p=self.service.case(cid,owner)['data']
         if not self.settings.nspd_url:
-            return {'status':'not_configured','notice':'Нужен разрешённый оператором адаптер НСПД. Публичная карта сама по себе не гарантирует стабильного API.','map_url':'https://nspd.gov.ru/map','cadastre':p.get('cadastre')}
+            ring = p.get('coordinates')
+            contour = None
+            if ring:
+                closed = [list(point) for point in ring]
+                if closed[0] != closed[-1]:
+                    closed.append(closed[0][:])
+                contour = {'type':'FeatureCollection','features':[{'type':'Feature','properties':{},'geometry':{'type':'Polygon','coordinates':[closed]}}]}
+            return {
+                'status':'manual_action_required',
+                'service_url':NSPD_URBAN_URL,
+                'map_url':NSPD_URBAN_URL,
+                'cadastre':p.get('cadastre'),
+                'contour_geojson':contour,
+                'steps':[
+                    'Откройте «Градостроительную проработку онлайн» по ссылке.',
+                    'Авторизуйтесь самостоятельно через Госуслуги, если сервис запрашивает вход. Пароль и коды боту не передавайте.',
+                    'Найдите участок по кадастровому номеру либо загрузите подготовленный GeoJSON-контура WGS84. Если их нет, сначала получите исходные данные.',
+                    'Выполните проработку и сохраните доступный результат — документ или ссылку.',
+                    'Отправьте сюда PDF или ссылку результата НСПД. Материал сохранится в деле как непроверенный; затем его проверит специалист.'
+                ],
+                'notice':'Основной сервис — НСПД «Градостроительная проработка онлайн». Автоматическое получение не настроено; используйте портал вручную. Данные и полноту покрытия выбранной территории необходимо проверить.'
+            }
         result=request_json(self.settings.nspd_url,{'cadastre':p.get('cadastre'),'coordinates':p.get('coordinates')},self.settings.nspd_key)
         # Evidence is not automatically promoted to verified facts or zoning rules.
         self.service.db.audit(owner,'nspd_lookup',cid)
-        return {'status':'received_unverified','data':result,'notice':'Сведения адаптера требуют проверки специалистом; карточка и нормы автоматически не изменены.'}
+        return {'status':'received_unverified','service_url':NSPD_URBAN_URL,'data':result,'notice':'Сведения адаптера требуют проверки специалистом; карточка и нормы автоматически не изменены.'}
 
     def explain(self,cid,owner):
         r=self.service.analyze(cid,owner)
