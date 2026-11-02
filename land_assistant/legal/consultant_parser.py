@@ -51,6 +51,7 @@ def parse_document(page,*,as_of_date,parent_metadata=None):
     if edition and iso_date(edition.group(1))>as_of_date or effective and iso_date(effective.group(1))>as_of_date:raise SourceError('source_edition_unknown')
     if edition:version='ред. от '+edition.group(1)
     elif re.search(r'(?<![а-яё])действующая\s+редакция(?![а-яё])',description,re.I):version='Действующая редакция по метаданным страницы; дата редакции не указана'
+    elif re.search(r'\(последняя\s+редакция\)',title,re.I):version='Последняя редакция по заголовку издателя; дата редакции не указана'
     elif parent_metadata and parent_metadata.get('edition_status')=='current':version=parent_metadata['edition_label']
     else:raise SourceError('source_edition_unknown')
     # Observed normative article pages repeat their heading inside doc-style.

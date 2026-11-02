@@ -29,7 +29,9 @@ class PinnedHTTPS(http.client.HTTPSConnection):
 def request_once(url,ip,timeout):
     p=urlsplit(url);conn=PinnedHTTPS(p.hostname,ip,timeout)
     try:
-        conn.request('GET',p.path,headers={'User-Agent':'GroundAndLaw/0.2 verified public document reader','Accept-Encoding':'identity'})
+        headers={'User-Agent':'GroundAndLaw/0.2 verified public document reader','Accept-Encoding':'identity'}
+        if p.path=='/search/':headers['X-Requested-With']='XMLHttpRequest'
+        conn.request('GET',p.path+('?' + p.query if p.query else ''),headers=headers)
         r=conn.getresponse();headers={k.lower():v for k,v in r.getheaders()}
         limit=8*1024*1024 if headers.get('content-type','').split(';')[0]=='application/pdf' else 2*1024*1024
         data=bytearray();end=time.monotonic()+timeout
@@ -42,9 +44,12 @@ def request_once(url,ip,timeout):
         return r.status,headers,bytes(data)
     finally:conn.close()
 
-async def fetch_document(url: str, *, deadline: float) -> FetchedDocument:
+async def fetch_document(url: str, *, deadline: float, discovery: bool=False) -> FetchedDocument:
     for _ in range(4):
-        validate_source_url(url)
+        if discovery:
+            from .web_discovery import validate_search_url
+            validate_search_url(url)
+        else:validate_source_url(url)
         remaining=min(10,deadline-time.monotonic())
         if remaining<=0:raise SourceError('source_budget_exhausted')
         try:

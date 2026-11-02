@@ -45,6 +45,8 @@ DEFAULT_QUERY={'land':'защита прав на земельные участ�
 def search_query(formulation,topic):
     formulation=formulation.replace("ё","е").replace("Ё","Е")
     # Only canonical legal phrases leave the host. No arbitrary client token does.
+    if topic in ('administrative','criminal','other_legal') and re.search(r'паспорт',formulation,re.I) and re.search(r'укра|утрат|потер|хищ|краж',formulation,re.I):
+        return 'паспорт гражданина Российской Федерации утрата хищение паспорта заявление замена недействительность документы удостоверяющие гражданство'
     if topic=='family' and re.search(r'алимент',formulation,re.I) and re.search(r'ребен|дет|несовершеннолет',formulation,re.I):
         return 'обязанности родителей по содержанию несовершеннолетних детей размер алиментов взыскиваемых на несовершеннолетних детей взыскание алиментов в твердой денежной сумме'
     if topic=='tax' and re.search(r'прода|продаж|отчужден',formulation.lower()):

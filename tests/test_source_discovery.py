@@ -27,7 +27,7 @@ class DiscoveryTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as tmp:
    lib=VerifiedSourceLibrary(Path('knowledge'),Path(tmp));now=datetime.now(timezone.utc).isoformat();day=datetime.now().date().isoformat()
    lib.index.upsert(VerifiedDocument('https://www.consultant.ru/document/cons_doc_LAW_305/','Закон о защите прав потребителей','КонсультантПлюс','normative_act','current','ред. от 01.01.2026',now,[{'text':'Сроки предъявления требований потребителем при обнаружении недостатков товара.','citation':'Статья 19'}]))
-   with patch.object(lib.library,'search',return_value=[]) as search:
+   with patch.object(lib.library,'search',return_value=[]) as search,patch('land_assistant.legal.source_discovery.discover_roots',return_value=[]):
     asyncio.run(lib.search('права потребителя при обнаружении недостатков товара сроки предъявления требований','consumer',day,RequestBudget()))
    search.assert_called_once()
  def test_rights_article_number_accepts_heading_punctuation_not_subarticle(self):
@@ -39,3 +39,52 @@ class DiscoveryTests(unittest.TestCase):
   q=search_query('Разводимся, алименты на ребенка, место работы отца неизвестно','family')
   self.assertIn('твердой',search_query('Алименты на ребёнка, доход неизвестен','family'));self.assertIn('содержанию',q);self.assertIn('твердой',q);self.assertNotIn('происхождения',q)
   self.assertFalse(VerifiedSourceLibrary.covered(q,'family',[{'citation':'Статья 90. Алименты бывшему супругу','text':'Алиментные отношения.'}]))
+ def test_missing_registered_materials_searches_web_then_reuses_discovered_index(self):
+  from unittest.mock import AsyncMock
+  with tempfile.TemporaryDirectory() as tmp:
+   lib=VerifiedSourceLibrary(Path('knowledge'),Path(tmp));now=datetime.now(timezone.utc).isoformat();day=datetime.now().date().isoformat()
+   f={'id':'new','source_url':'https://www.consultant.ru/document/cons_doc_LAW_999999/','title':'Новый проверенный закон','citation':'Статья 1','text':'Порядок восстановления утраченного документа.','version':'ред. от 01.01.2026','last_checked_at':now}
+   root={'id':'web_999999','url':f['source_url'],'topics':['administrative'],'enabled':True}
+   with patch.object(lib.library,'search',AsyncMock(side_effect=[[],[{'id':'new'}]])),patch.object(lib.library,'read',return_value=f),patch('land_assistant.legal.source_discovery.discover_roots',AsyncMock(return_value=[root])) as web:
+    result=asyncio.run(lib.search('восстановление утраченного документа','administrative',day,RequestBudget()))
+   self.assertTrue(result);web.assert_awaited_once()
+   cached=VerifiedSourceLibrary(Path('knowledge'),Path(tmp))
+   with patch('land_assistant.legal.source_discovery.discover_roots',side_effect=AssertionError('fresh cache avoids network')):
+    result=asyncio.run(cached.search('восстановления утраченного документа','administrative',day,RequestBudget()))
+   self.assertTrue(result)
+ def test_explicit_source_expansion_searches_web_even_if_catalog_has_some_materials(self):
+  from unittest.mock import AsyncMock
+  with tempfile.TemporaryDirectory() as tmp:
+   lib=VerifiedSourceLibrary(Path('knowledge'),Path(tmp));now=datetime.now(timezone.utc).isoformat();day=datetime.now().date().isoformat()
+   f={'id':'new','source_url':'https://www.consultant.ru/document/cons_doc_LAW_999999/','title':'Новый закон','citation':'Статья 1','text':'Норма по теме административных процедур.','version':'ред. от 01.01.2026','last_checked_at':now}
+   root={'id':'web_999999','url':f['source_url'],'topics':['administrative'],'enabled':True}
+   with patch.object(lib.library,'search',AsyncMock(return_value=[{'id':'new'}])),patch.object(lib.library,'read',return_value=f),patch('land_assistant.legal.source_discovery.discover_roots',AsyncMock(return_value=[root])) as web:
+    result=asyncio.run(lib.search('административные процедуры','administrative',day,RequestBudget(),refresh=True))
+   self.assertTrue(result);web.assert_awaited_once()
+ def test_passport_cache_ignores_unrelated_citizenship_articles(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   lib=VerifiedSourceLibrary(Path('knowledge'),Path(tmp));now=datetime.now(timezone.utc).isoformat();day=datetime.now().date().isoformat()
+   lib.index.upsert(VerifiedDocument('https://www.consultant.ru/document/cons_doc_LAW_445998/','О гражданстве','КонсультантПлюс','normative_act','current','ред. от 26.06.2026',now,[{'text':'Утрата паспорта: незамедлительно заявить в территориальный орган внутренних дел.','citation':'Статья 9. Документы'},{'text':'Паспорт при прекращении гражданства и сведения о гражданстве.','citation':'Статья 25. Прекращение гражданства'}]))
+   hits=asyncio.run(lib.search('паспорт утрата хищение','administrative',day,RequestBudget()))
+   self.assertEqual(len(hits),1);self.assertTrue(hits[0]['citation'].startswith('Статья 9.'))
+ def test_initial_catalog_then_refresh_share_budget_without_skipping_web(self):
+  from unittest.mock import AsyncMock
+  with tempfile.TemporaryDirectory() as tmp:
+   lib=VerifiedSourceLibrary(Path('knowledge'),Path(tmp));now=datetime.now(timezone.utc).isoformat();day=datetime.now().date().isoformat();budget=RequestBudget()
+   def fragment(fid,doc):return {'id':fid,'source_url':f'https://www.consultant.ru/document/cons_doc_LAW_{doc}/','title':'Закон','citation':'Статья 1','text':'Правило административной процедуры.','version':'ред. от 01.01.2026','last_checked_at':now}
+   root={'id':'web_999999','url':fragment('new',999999)['source_url'],'topics':['administrative'],'enabled':True}
+   with patch.object(lib.library,'search',AsyncMock(side_effect=[[{'id':'old'}],[{'id':'new'}]])),patch.object(lib.library,'read',side_effect=lambda fid,day:fragment(fid,34661 if fid=='old' else 999999)),patch('land_assistant.legal.source_discovery.discover_roots',AsyncMock(return_value=[root])) as web:
+    asyncio.run(lib.search('административная процедура','administrative',day,budget))
+    result=asyncio.run(lib.search('дополнительные административные основания','administrative',day,budget,refresh=True))
+   self.assertTrue(result);web.assert_awaited_once()
+ def test_initial_catalog_reserves_three_new_document_slots_for_web_expansion(self):
+  from unittest.mock import AsyncMock
+  with tempfile.TemporaryDirectory() as tmp:
+   lib=VerifiedSourceLibrary(Path('knowledge'),Path(tmp));now=datetime.now(timezone.utc).isoformat();day=datetime.now().date().isoformat();budget=RequestBudget()
+   f={'id':'old','source_url':'https://www.consultant.ru/document/cons_doc_LAW_34661/','title':'Закон','citation':'Статья 1','text':'Административная процедура.','version':'ред. от 01.01.2026','last_checked_at':now}
+   async def exhaustive(query,topic,date,b):
+    b.documents_left=0
+    return [{'id':'old'}]
+   with patch.object(lib.library,'search',exhaustive),patch.object(lib.library,'read',return_value=f):
+    asyncio.run(lib.search('административная процедура','administrative',day,budget))
+   self.assertGreaterEqual(budget.documents_left,3)

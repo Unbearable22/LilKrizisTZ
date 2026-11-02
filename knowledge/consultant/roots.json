@@ -130,6 +130,17 @@
       ],
       "label": "ЗК РФ",
       "enabled": true
+    },
+    {
+      "id": "citizenship",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_445998/",
+      "topics": [
+        "administrative",
+        "criminal",
+        "other_legal"
+      ],
+      "label": "О гражданстве Российской Федерации, включая паспорт",
+      "enabled": true
     }
   ]
 }

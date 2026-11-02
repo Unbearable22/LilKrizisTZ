@@ -74,3 +74,16 @@ class LibraryTests(unittest.TestCase):
     except SourceError:pass
     self.assertEqual(first.read(hits[0]['id'],'2026-10-22')['text'],original)
   asyncio.run(run())
+ def test_passport_loss_reads_relevant_passport_article_not_citizenship_revocation(self):
+  class PassportHTTP(FakeHTTP):
+   async def fetch(self,url,**kw):
+    self.calls+=1
+    title='Закон (ред. от 01.01.2026)' if url==ROOT else 'Статья '+('9. Документы, удостоверяющие гражданство' if url==ARTICLE else '11. Утрата иностранного гражданства')
+    body=f'<a href="{ARTICLE}">Статья 9. Документы, удостоверяющие гражданство</a><a href="{ROOT+"b"*40+"/"}">Статья 11. Утрата иностранного гражданства</a>' if url==ROOT else f'<p class="doc-style">{title}</p><p>При утрате паспорта необходимо незамедлительно заявить об этом.</p>'
+    return DocumentPage(url,200,{},f'<h1>{title}</h1><div class="document-page__content">{body}</div>','2026-10-22T00:00:00+00:00')
+  async def run():
+   with tempfile.TemporaryDirectory() as tmp:
+    root=Path(tmp);(root/'roots.json').write_text(json.dumps({'roots':[{'id':'citizenship','url':ROOT,'topics':['administrative'],'enabled':True}]}));http=PassportHTTP();lib=ConsultantLibrary(root/'roots.json',root/'cache',http=http,now=lambda:__import__('datetime').datetime(2026,10,22,1,tzinfo=__import__('datetime').timezone.utc))
+    hits=await lib.search('паспорт утрата хищение','administrative','2026-10-22',RequestBudget())
+    self.assertTrue(hits);self.assertTrue(all(f['citation'].startswith('Статья 9.') for f in hits));self.assertEqual(http.calls,2)
+  asyncio.run(run())

@@ -24,3 +24,6 @@ class ParserTests(unittest.TestCase):
   cases=[page(title='Закон',meta='<meta name="description" content="Недействующая редакция">'),page(body='<p>Документ утратил силу</p><p>Статья 1. Прежнее правило.</p>'),page(title='Закон (недействующая редакция, ред. от 01.01.2026)')]
   for item in cases:
    with self.subTest(body=item.body),self.assertRaises(SourceError):parse_document(item,as_of_date='2026-10-22')
+ def test_publisher_latest_edition_title_is_explicit_current_evidence(self):
+  p=page(title='Федеральный закон N 138-ФЗ (последняя редакция)')
+  self.assertEqual(parse_document(p,as_of_date='2026-10-22')['edition_status'],'current')

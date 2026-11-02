@@ -36,10 +36,12 @@ class ConsultantLibrary:
         budget.require()
         if min(budget.roots_left,budget.articles_left,budget.context_left)<=0:raise SourceError('source_budget_exhausted')
         roots=[r for r in self.roots if r.get('enabled') and legal_topic in r['topics'] and (r['id']!='enforcement' or re.search(r'исполнительн|пристав',query,re.I))]
+        if 'паспорт' in query and any(r['id']=='citizenship' for r in roots):roots=[r for r in roots if r['id']=='citizenship']
         if not roots:raise SourceError('search_no_candidates')
         if legal_topic=='civil' and re.search(r'продаж.*недвижим',query,re.I):roots=[r for r in roots if r['id']=='civil2']
         if legal_topic=='tax' and re.search(r'продаж.*недвижим',query,re.I):roots=[r for r in roots if r['id']=='tax2']
         roots=roots[:budget.roots_left]
+        passport_loss='паспорт' in query and bool(re.search(r'утрат|хищ',query,re.I))
         words=terms(query);candidates=[];self.errors=[];self.fragments=[];self.allowed_ids=set()
         for root in roots:
             try:
@@ -48,7 +50,9 @@ class ConsultantLibrary:
                 parsed=parse_document(page,as_of_date=checked_day)
                 frequency=Counter(word for item in parsed['toc'] for word in terms(item['title']))
                 for item in parsed['toc']:
+                    if passport_loss and root['id']=='citizenship' and not re.match(r'Статья\s+9(?!\d|\.\d)',item['title']):continue
                     title_words=terms(item['title']);score=sum(math.log(1+(len(parsed['toc'])+1)/(frequency[word]+1)) for word in words & title_words)/(1+.02*len(title_words))
+                    if 'паспорт' in query and re.search(r'Документы, удостоверяющие гражданство',item['title'],re.I):score+=1000
                     if legal_topic=='family' and 'алиментов' in query and 'несовершеннолетних детей' in query:
                         number=re.search(r'Статья\s+(\d+)',item['title'])
                         if number and number.group(1) in ('80','81','83'):score+=1000-10*('80','81','83').index(number.group(1))
@@ -91,7 +95,7 @@ class ConsultantLibrary:
                     document_id='cp_'+root['id']+'_'+hashlib.sha256(item['url'].encode()).hexdigest()[:8]
                     fragment={'document_id':document_id,'title':parent['title'],'citation':item['title'],'act_designation':parent['act_designation'],'version':parent['edition_label'],'source_url':page.canonical_url,'effective_from':parent['effective_from'],'text':piece,'page_hash':page_hash,'part_index':index,'demo':False,'partial':len(pieces)>1 or omitted,'retrieved_at':page.checked_at,'last_checked_at':page.checked_at,'extraction_status':'verified_current','scope_note':parent['scope_note']}
                     fid=self.cache.put(fragment);self.allowed_ids.add(fid);self.fragments.append(self.cache.read(fid,as_of_date=as_of_date,now=self.now()));budget.context_left-=len(piece)
-                if depth==0:
+                if depth==0 and not passport_loss:
                     referenced=set(re.findall(r'стат(?:ь[а-яё]+|ей)\s+(\d+(?:\.\d+)?)',text,re.I))
                     for link in parent['toc']:
                         number=re.search(r'Статья\s+(\d+(?:\.\d+)?)',link['title'])
