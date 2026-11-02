@@ -37,11 +37,21 @@
         return chat.messages.slice(0,index<0?0:index).filter(message=>message.role==='user')
             .map(message=>({text:message.text,intake:message.intake || {}}));
     }
+    function safeEvidence(item) {
+        if(!item || !['title','publisher','source_kind','url','citation','revision','checked_at'].every(k=>typeof item[k]==='string' && item[k].length<=2000))return false;
+        try {
+            const u=new URL(item.url);
+            if(u.protocol!=='https:' || u.username || u.password || u.port || u.search || u.hash)return false;
+            const permitted=(['consultant.ru','www.consultant.ru'].includes(u.hostname) && /^\/document\/cons_doc_LAW_\d+\/(?:[a-f0-9]{40}\/)?$/.test(u.pathname)) || (u.hostname==='www.nalog.gov.ru' && u.pathname==='/rn77/fl/pay_taxes/land/land_sell/');
+            return permitted && ['normative_act','official_explanation','court_document'].includes(item.source_kind) && Number.isFinite(Date.parse(item.checked_at));
+        } catch { return false; }
+    }
     function publicResult(value={}) {
         const result={};
         for(const key of ['status','answer','mode','chat_id','requestId']) {
             if(typeof value[key]==='string')result[key]=value[key];
         }
+        result.evidence=(Array.isArray(value.evidence)?value.evidence:[]).filter(safeEvidence).slice(0,24).map(({title,publisher,source_kind,url,citation,revision,checked_at},i)=>({number:i+1,title,publisher,source_kind,url,citation,revision,checked_at}));
         result.missing_fields=(Array.isArray(value.missing_fields)?value.missing_fields:[])
             .filter(item=>item && typeof item.key==='string' && typeof item.label==='string' && !hasReferences(item.key) && !hasReferences(item.label))
             .map(({key,label})=>({key,label}));

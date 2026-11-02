@@ -633,6 +633,20 @@ function renderLegalMessage(container, chat, message) {
         }
         container.appendChild(section);
     }
+    if (data.evidence?.length) {
+        const section=document.createElement('div'); section.className='legal-evidence';
+        const heading=document.createElement('strong'); heading.textContent='Документы и источники'; section.appendChild(heading);
+        const types={normative_act:'Нормативный акт',official_explanation:'Официальное разъяснение',court_document:'Судебный документ'};
+        for(const source of data.evidence) {
+            const paragraph=document.createElement('p');
+            const link=document.createElement('a'); link.href=source.url; link.target='_blank'; link.rel='noopener noreferrer';
+            link.textContent=`[${source.number}] ${source.title} — ${source.citation}`; paragraph.appendChild(link);
+            const info=document.createElement('small');
+            info.textContent=`${types[source.source_kind] || 'Документ'} · ${source.publisher} · ${source.revision} · проверено ${new Date(source.checked_at).toLocaleDateString('ru-RU',{timeZone:'Europe/Moscow'})}`;
+            paragraph.appendChild(info); section.appendChild(paragraph);
+        }
+        container.appendChild(section);
+    }
     if (data.limitations?.length) {
         const limits = document.createElement('p'); limits.className = 'legal-limitations'; limits.textContent = data.limitations.join(' '); container.appendChild(limits);
     }

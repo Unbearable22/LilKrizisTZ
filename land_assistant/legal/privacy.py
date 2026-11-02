@@ -1,4 +1,4 @@
-"""Keep evidence private while preserving internal grounding checks."""
+"""Publish verified document metadata; keep private execution data hidden."""
 import re
 
 REFERENCE_PATTERN = re.compile(
@@ -47,7 +47,7 @@ def has_references(text, fragments=()):
 
 def public_result(result):
     """Explicit boundary: future internal metadata cannot leak by default."""
-    return {key:result[key] for key in ('status','answer','missing_fields','limitations','mode','chat_id','legal_bases','source_checked_at','task_outcomes') if key in result}
+    return {key:result[key] for key in ('status','answer','missing_fields','limitations','mode','chat_id','legal_bases','source_checked_at','task_outcomes','evidence') if key in result}
 
 
 def has_unverified_references(text, fragments=()):

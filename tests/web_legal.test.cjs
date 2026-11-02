@@ -144,3 +144,12 @@ test('new legal code names checked and warranty does not collide with provider n
  assert.equal(publicResult({status:'answered',answer:'Статья 136 СК РФ.',legal_bases:b}).status,'error');
  assert.equal(publicResult({status:'answered',answer:'Гарантийный срок и гарантия качества.'}).status,'answered');
 });
+
+test('verified document links survive storage and reject foreign URLs',()=>{
+ const LegalPrivacy=require('../groundAndLaw/legal-api.js');
+ const source={number:1,title:'Закон',publisher:'КонсультантПлюс',source_kind:'normative_act',url:'https://www.consultant.ru/document/cons_doc_LAW_305/',citation:'Статья 18',revision:'ред. от 28.12.2025',checked_at:'2026-11-02T10:00:00+00:00'};
+ const result=LegalPrivacy.publicResult({status:'answered',answer:'Общий порядок.',evidence:[source,{...source,url:'https://www.consultant.ru.evil.test/'},{...source,url:'javascript:alert(1)'}]});
+ assert.equal(result.evidence.length,1);assert.equal(result.evidence[0].url,source.url);
+ const chat=LegalPrivacy.cleanChat({messages:[{role:'assistant',text:result.answer,legal:result}]});
+ assert.equal(chat.messages[0].legal.evidence[0].url,source.url);
+});

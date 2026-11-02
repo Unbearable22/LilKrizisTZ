@@ -657,3 +657,7 @@ body {
 .voice-feedback:has(span:empty) {display:none;}
 .voice-feedback button {margin-left:10px;cursor:pointer;}
 [data-voice][aria-pressed="true"] {color:#cf3434;background:#ffe6e6;}
+
+.legal-evidence { margin-top: 12px; font-size: .9rem; }
+.legal-evidence a { color: #176b58; overflow-wrap: anywhere; text-decoration: underline; }
+.legal-evidence small { display: block; color: #64716d; margin-top: 3px; }
