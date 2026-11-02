@@ -1,0 +1,22 @@
+[Unit]
+Description=GROUNDandLAW legal web chat
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=groundandlaw
+Group=groundandlaw
+WorkingDirectory=/opt/groundandlaw/app
+EnvironmentFile=/etc/groundandlaw.env
+ExecStart=/opt/groundandlaw/venv/bin/python -m land_assistant web --port 8080
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
