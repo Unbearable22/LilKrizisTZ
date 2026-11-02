@@ -23,3 +23,11 @@ class LauncherTests(unittest.TestCase):
    with self.assertRaises(ValueError):launcher.choose_endpoint(8080,False)
   with patch.object(launcher,'port_occupied',return_value=True),patch.object(launcher,'app_running',side_effect=lambda url:url.endswith(':8081')):
    self.assertEqual(launcher.choose_endpoint(8080,True),(8081,True))
+ def test_check_config_reports_only_missing_keys(self):
+  import io
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d);(root/'.env').write_text('LLM_URL=\nLLM_API_KEY="private-fixture"\nLLM_MODEL=\n')
+   out=io.StringIO()
+   with patch.object(launcher,'ROOT',root),patch.dict(os.environ,{},clear=True),patch('sys.stdout',out),patch('os.chdir'):
+    self.assertEqual(launcher.main(['--check-config']),1)
+   self.assertIn('LLM_URL',out.getvalue());self.assertIn('LLM_MODEL',out.getvalue());self.assertNotIn('private-fixture',out.getvalue());self.assertIn(str(root/'.env'),out.getvalue())

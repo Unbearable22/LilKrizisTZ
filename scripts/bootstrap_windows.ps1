@@ -29,18 +29,6 @@ try {
         Copy-Item -LiteralPath (Join-Path $app '.env.example') -Destination $envFile
 
     }
-    if ($args -notcontains '--demo') {
-        $contents = Get-Content -LiteralPath $envFile -Raw
-        $needsConfig = $false
-        foreach ($key in @('LLM_URL', 'LLM_API_KEY', 'LLM_MODEL')) {
-            $match = [regex]::Match($contents, ('(?m)^\s*' + $key + '\s*=\s*([^\r\n]*)'))
-            if (-not $match.Success -or -not $match.Groups[1].Value.Trim().Trim([char]34).Trim([char]39)) { $needsConfig = $true }
-        }
-        if ($needsConfig) {
-            Write-Host 'Fill LLM_URL, LLM_API_KEY and LLM_MODEL, then save and close Notepad.'
-            Start-Process notepad.exe -ArgumentList @('"' + $envFile + '"') -Wait
-        }
-    }
     $uv = Join-Path $tools 'uv.exe'
     $uvHash = 'a2a8820d5eea32f08ef467ef3b7f66883a9b076d5737a2fc2fbb5f458d1bb50f'
     # Fixed upstream release, ZIP checked against the upstream SHA-256 digest.
@@ -67,6 +55,16 @@ try {
     $python = & $uv python find --managed-python 3.12
     if ($LASTEXITCODE -ne 0 -or -not $python) { throw 'Managed Python 3.12 was not found.' }
     Set-Location -LiteralPath $app
+    if ($args -notcontains '--demo') {
+        & $python scripts/run_web.py --check-config
+        if ($LASTEXITCODE -ne 0) {
+            $editFile = $envFile
+            if (Test-Path -LiteralPath (Join-Path $source '.env')) { $editFile = Join-Path $source '.env' }
+            Write-Host "Fill the missing model settings, save and close Notepad: $editFile"
+            Start-Process notepad.exe -ArgumentList @('"' + $editFile + '"') -Wait
+            if ($editFile -ne $envFile) { Copy-Item -LiteralPath $editFile -Destination $envFile -Force }
+        }
+    }
     & $python scripts/run_web.py --auto-port @args
     exit $LASTEXITCODE
 } catch {

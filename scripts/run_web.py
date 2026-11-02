@@ -78,6 +78,7 @@ def choose_endpoint(port, auto=False):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Start GROUNDandLAW web chat and open the browser.')
+    parser.add_argument('--check-config', action='store_true', help='Check required settings without starting the server.')
     parser.add_argument('--demo', action='store_true', help='Run without LLM API calls.')
     parser.add_argument('--no-speech', action='store_true', help='Skip local Whisper installation.')
     parser.add_argument('--no-browser', action='store_true')
@@ -88,10 +89,18 @@ def main(argv=None):
         raise ValueError('Port must be between 1 and 65535.')
     os.chdir(ROOT)
     load_env(ROOT / '.env')
-    if not args.demo and not all(os.environ.get(k, '').strip() for k in ('LLM_URL', 'LLM_API_KEY', 'LLM_MODEL')):
+    missing=[k for k in ('LLM_URL', 'LLM_API_KEY', 'LLM_MODEL') if not os.environ.get(k, '').strip()]
+    if not args.demo and missing:
         if not (ROOT / '.env').exists():
             (ROOT / '.env').write_bytes((ROOT / '.env.example').read_bytes())
-        raise ValueError('Fill LLM_URL, LLM_API_KEY and LLM_MODEL in .env, then run again. Use --demo for a demonstration without API.')
+        message='Missing settings: '+', '.join(missing)+'. File: '+str(ROOT / '.env')
+        if args.check_config:
+            print(message)
+            return 1
+        raise ValueError(message)
+    if args.check_config:
+        print('Model settings are configured.')
+        return 0
     args.port, running = choose_endpoint(args.port, args.auto_port)
     url = f'http://127.0.0.1:{args.port}'
     if running:
