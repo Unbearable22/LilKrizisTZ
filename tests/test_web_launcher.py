@@ -31,3 +31,12 @@ class LauncherTests(unittest.TestCase):
    with patch.object(launcher,'ROOT',root),patch.dict(os.environ,{},clear=True),patch('sys.stdout',out),patch('os.chdir'):
     self.assertEqual(launcher.main(['--check-config']),1)
    self.assertIn('LLM_URL',out.getvalue());self.assertIn('LLM_MODEL',out.getvalue());self.assertNotIn('private-fixture',out.getvalue());self.assertIn(str(root/'.env'),out.getvalue())
+ def test_speech_download_runs_in_background_and_failure_is_optional(self):
+  import subprocess,io
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d);out=io.StringIO()
+   with patch.object(launcher,'ROOT',root),patch.dict(os.environ,{},clear=True),patch('subprocess.Popen') as proc,patch('sys.stdout',out):
+    launcher.start_speech_download(Path('python'))
+    self.assertEqual(proc.call_count,1);self.assertTrue(os.environ.get('SPEECH_READY_FILE'));self.assertNotIn('LLM_API_KEY',proc.call_args.kwargs['env'])
+   with patch.object(launcher,'ROOT',root),patch('subprocess.Popen',side_effect=OSError('download unavailable')),patch('sys.stdout',out):
+    self.assertIsNone(launcher.start_speech_download(Path('python')))

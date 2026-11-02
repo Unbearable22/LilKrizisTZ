@@ -9,6 +9,9 @@ def speech_python():
  if configured:return Path(configured)
  return ROOT/('.venv-speech/Scripts/python.exe' if os.name=='nt' else '.venv-speech/bin/python')
 def available():
+ if os.getenv('SPEECH_DISABLED')=='1':return False
+ ready=os.getenv('SPEECH_READY_FILE')
+ if ready and not Path(ready).is_file():return False
  return speech_python().is_file() and (ROOT/'data/speech-model/model.bin').is_file()
 def transcribe(body,mime):
  if not body or len(body)>MAX_BYTES:raise SpeechError('Запись пуста или превышает 8 МиБ.')

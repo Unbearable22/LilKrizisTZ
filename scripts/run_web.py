@@ -47,7 +47,7 @@ def prepare_environment(speech):
     if speech:
         requirements.append(ROOT / 'requirements-speech.txt')
     digest = hashlib.sha256(b''.join(p.read_bytes() for p in requirements)).hexdigest()
-    marker = env / '.web-requirements.sha256'
+    marker = env / ('.web-requirements-speech.sha256' if speech else '.web-requirements-core.sha256')
     if not marker.exists() or marker.read_text() != digest:
         print('Installing dependencies (first start or updated requirements)...', flush=True)
         command = [str(python), '-m', 'pip', 'install']
@@ -56,6 +56,30 @@ def prepare_environment(speech):
         subprocess.run(command, check=True, cwd=ROOT)
         marker.write_text(digest)
     return python
+
+def start_speech_download(python):
+    model = ROOT / 'data/speech-model'
+    model.mkdir(parents=True, exist_ok=True)
+    ready = model / '.ready'
+    os.environ['SPEECH_READY_FILE'] = str(ready)
+    if ready.is_file():
+        return None
+    print('Voice model is preparing in the background. Text chat will start now.', flush=True)
+    env = {k:v for k,v in os.environ.items() if k in ('PATH','SYSTEMROOT','WINDIR','TEMP','TMP','LOCALAPPDATA','USERPROFILE','LANG','SSL_CERT_FILE','SSL_CERT_DIR','HTTPS_PROXY','HTTP_PROXY','NO_PROXY')}
+    env.update(HF_HUB_DISABLE_XET='1', HF_HUB_DOWNLOAD_TIMEOUT='60', HF_HUB_ETAG_TIMEOUT='30')
+    try:
+        with (ROOT / 'data/speech-download.log').open('ab') as log:
+            return subprocess.Popen([str(python), str(ROOT / 'scripts/prepare_speech_model.py'), str(model)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)
+    except OSError:
+        print('Voice preparation could not start. Continuing with text chat.', flush=True)
+        return None
+
+def stop_background(process):
+    if process is not None and process.poll() is None:
+        process.terminate()
+        try:process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill();process.wait()
 
 def app_running(url):
     try:
@@ -110,18 +134,26 @@ def main(argv=None):
         return 0
     if not (3, 10) <= sys.version_info[:2] <= (3, 13):
         raise ValueError('Install Python 3.12 (recommended) or 3.13 for the Windows launcher and local Whisper.')
-    python = prepare_environment(not args.no_speech)
+    python = prepare_environment(False)
+    speech_download = None
+    os.environ['SPEECH_DISABLED'] = '1'
     if not args.no_speech:
-        model = ROOT / 'data/speech-model'
-        if not all((model / name).exists() for name in ('model.bin', 'config.json', 'tokenizer.json', 'vocabulary.txt')):
-            print('Downloading local Whisper model (about 462 MiB, first start only)...', flush=True)
-            subprocess.run([str(python), '-c', "from huggingface_hub import snapshot_download; import sys; snapshot_download('Systran/faster-whisper-small', local_dir=sys.argv[1], allow_patterns=['model.bin','config.json','tokenizer.json','vocabulary.txt'])", str(model)], check=True, cwd=ROOT)
-        os.environ['SPEECH_PYTHON'] = str(python)
+        try:
+            prepare_environment(True)
+            os.environ['SPEECH_PYTHON'] = str(python)
+            os.environ['SPEECH_DISABLED'] = '0'
+            speech_download = start_speech_download(python)
+        except (OSError, subprocess.CalledProcessError):
+            os.environ['SPEECH_DISABLED'] = '1'
+            print('Voice dependencies are unavailable. Continuing with text chat.', flush=True)
     command = [str(python), '-m', 'land_assistant', 'web', '--port', str(args.port)]
     if args.demo:
         command.append('--demo')
     print(f'Starting {url}. Keep this window open; Ctrl+C stops the server.', flush=True)
-    child = subprocess.Popen(command, cwd=ROOT)
+    try:child = subprocess.Popen(command, cwd=ROOT)
+    except OSError:
+        stop_background(speech_download)
+        raise
     try:
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
@@ -135,6 +167,7 @@ def main(argv=None):
             time.sleep(.25)
         raise ValueError('Web server did not become ready within 30 seconds. See messages above.')
     finally:
+        stop_background(speech_download)
         if child.poll() is None:
             child.terminate()
             try:
