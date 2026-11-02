@@ -616,7 +616,7 @@ function renderLegalMessage(container, chat, message) {
     }
     if (data.source_checked_at) {
         const checked = document.createElement('p'); checked.className = 'legal-source-date';
-        checked.textContent = 'Нормативные материалы проверены: ' + new Date(data.source_checked_at).toLocaleString('ru-RU', {timeZone:'Europe/Moscow'});
+        checked.textContent = 'Источники проверены: ' + new Date(data.source_checked_at).toLocaleString('ru-RU', {timeZone:'Europe/Moscow'});
         container.appendChild(checked);
     }
     const failedTasks = (data.task_outcomes || []).filter(task => ['error','insufficient_sources'].includes(task.status));

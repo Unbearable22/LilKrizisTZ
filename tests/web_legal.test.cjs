@@ -153,3 +153,8 @@ test('verified document links survive storage and reject foreign URLs',()=>{
  const chat=LegalPrivacy.cleanChat({messages:[{role:'assistant',text:result.answer,legal:result}]});
  assert.equal(chat.messages[0].legal.evidence[0].url,source.url);
 });
+
+test('generic legislation wording does not erase checked response',()=>{
+ const {publicResult}=require('../groundAndLaw/legal-api.js');
+ assert.equal(publicResult({status:'answered',answer:'Кроме случаев, предусмотренных законодательством о кадастровой оценке.'}).status,'answered');
+});

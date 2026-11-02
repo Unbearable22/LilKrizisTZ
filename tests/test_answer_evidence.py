@@ -17,3 +17,7 @@ class EvidenceTests(unittest.TestCase):
   from land_assistant.legal.answer_evidence import validate_claim_sections
   result={'answer':'Точный ответ.','scenarios':[],'claims':[{'section':'answer','text':'Иной ответ.','evidence_ids':['f1'],'anchors':[{'fragment_id':'f1','quote':'не является основанием для отказа'}]}]}
   with self.assertRaises(LegalError):validate_claim_sections(result,[self.f])
+ def test_section_references_do_not_require_duplicate_answer_text(self):
+  from land_assistant.legal.answer_evidence import validate_claim_sections
+  result={'answer':'Отсутствие чека само по себе не исключает защиту.','claims':[{'section':'answer','evidence_ids':['f1'],'anchors':[{'fragment_id':'f1','quote':'не является основанием для отказа'}]}]}
+  validate_claim_sections(result,[self.f])

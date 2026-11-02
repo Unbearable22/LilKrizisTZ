@@ -12,7 +12,7 @@ class LocalLegalMCP:
         self.root=Path(root).resolve()
         self.demo=demo
 
-    async def context(self,query):
+    async def context(self,query,max_reads=6):
         args=['-m','land_assistant.legal.mcp_server','--knowledge-root',str(self.root)]
         if self.demo:args.append('--demo')
         env={k:v for k,v in os.environ.items() if k in ('PATH','SYSTEMROOT','WINDIR','LANG','LC_ALL','TMPDIR','TEMP','TMP')}
@@ -33,7 +33,7 @@ class LocalLegalMCP:
                     return structured if structured is not None else json.loads(result.content[0].text)
                 matches=value(found)['fragments']
                 fragments=[];size=0
-                for hit in matches[:6]:
+                for hit in matches[:max(0,min(6,max_reads))]:
                     result=await session.call_tool('read_legal_fragment',{'fragment_id':hit['id']})
                     fragment=value(result)
                     if size+len(fragment['text'])>16000:continue
@@ -43,4 +43,4 @@ class LocalLegalMCP:
                 reduced=len(fragments)<len(matches)
                 limitations=['Объём учтённых материалов ограничен; ответ не является исчерпывающим анализом ситуации.'] if reduced else []
                 if any(f.get('partial') for f in fragments):limitations.append('Учтена часть доступных материалов; отдельные условия могут требовать дополнительного разбора.')
-                return {'prompt':master,'fragments':fragments,'trace':trace,'context_reduced':reduced,'limitations':limitations}
+                return {'prompt':master,'fragments':fragments,'trace':trace,'reads_used':min(len(matches),max(0,min(6,max_reads))),'context_reduced':reduced,'limitations':limitations}

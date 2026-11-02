@@ -14,9 +14,9 @@ class ValidationResult:
 def validate_claims(claims,fragments):
     if not isinstance(claims,list) or not 1<=len(claims)<=4:raise LegalError('invalid_claims')
     for claim in claims:
-        if not isinstance(claim,dict) or set(claim)!={'section','text','evidence_ids','anchors'}:raise LegalError('invalid_claims')
+        if not isinstance(claim,dict) or not {'section','evidence_ids','anchors'}<=set(claim) or isinstance(claim,dict) and bool(set(claim)-{'section','text','evidence_ids','anchors'}):raise LegalError('invalid_claims')
         if not isinstance(claim['section'],str) or not re.fullmatch(r'answer|scenario:[0-2]',claim['section']):raise LegalError('invalid_claims')
-        if not isinstance(claim['text'],str) or not 1<=len(claim['text'])<=20000:raise LegalError('invalid_claims')
+        if 'text' in claim and (not isinstance(claim['text'],str) or not 1<=len(claim['text'])<=20000):raise LegalError('invalid_claims')
         ids=claim['evidence_ids'];anchors=claim['anchors']
         if not isinstance(ids,list) or not 1<=len(ids)<=6 or any(not isinstance(i,str) or i not in fragments for i in ids):raise LegalError('invalid_claims')
         if not isinstance(anchors,list) or not 1<=len(anchors)<=6:raise LegalError('invalid_claims')
@@ -47,4 +47,4 @@ def validate_claim_sections(result,fragments):
     claims=validate_claims(result.get('claims'),{f['id']:f for f in fragments}).accepted_claims
     expected={'answer':result['answer']}
     for i,branch in enumerate(result.get('scenarios',[])):expected['scenario:'+str(i)]=branch['condition']+' → '+branch['outcome']
-    if len(claims)!=len(expected) or {c['section']:c['text'] for c in claims}!=expected:raise LegalError('invalid_claim_coverage')
+    if len(claims)!=len(expected) or {c['section'] for c in claims}!=set(expected) or any('text' in c and c['text']!=expected[c['section']] for c in claims):raise LegalError('invalid_claim_coverage')

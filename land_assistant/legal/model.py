@@ -50,7 +50,7 @@ class DemoModel:
 
 
 
-CLAIM_CONTRACT='\nДополнительное обязательное поле для answered и partial_answer: claims. Ровно один объект для answer и один на каждый scenarios[i]. Формат {"section":"answer" или "scenario:0","text":"точная полная копия answer; для сценария condition + \' → \' + outcome","evidence_ids":["ID"],"anchors":[{"fragment_id":"ID","quote":"точная непрерывная цитата из text этого фрагмента длиной 15–2000 символов"}]}. Не пересказывай цитату, не меняй пробелы и знаки. Для каждого evidence_id нужна опора. Цитаты находятся только внутри claims, в публичный answer их не вставляй. Все существенные выводы должны вытекать из опор с сохранением условий и исключений. При недостатке оснований верни insufficient_sources.\n'
+CLAIM_CONTRACT='\nДополнительное обязательное поле для answered и partial_answer: claims. Ровно один объект для полного answer и один для полного scenarios[i]. Формат {"section":"answer" или "scenario:0","evidence_ids":["ID"],"anchors":[{"fragment_id":"ID","quote":"точная непрерывная цитата из text этого фрагмента длиной 15–240 символов"}]}. Не копируй answer и сценарии в claims. Не пересказывай цитату, не меняй пробелы и знаки. Для каждого evidence_id нужна опора. Цитаты только внутри claims, в публичный answer их не вставляй. Каждый полный раздел должен вытекать из указанных материалов с сохранением условий и исключений. Предпочитай 1–2 содержательных условных варианта; не дублируй один вывод тремя способами. При недостатке оснований верни insufficient_sources.\n'
 
 class LiveModel:
     require_legal_bases=True
@@ -67,7 +67,7 @@ class LiveModel:
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(timeout,connect=10),follow_redirects=False) as client:
                 response=await client.post(self.settings.llm_url,headers=headers,json={
-                    'model':(self.settings.llm_classifier_model or self.settings.llm_model) if stage=='classify' else self.settings.llm_model,'temperature':0,'max_tokens':2048 if stage=='classify' else 1024 if stage=='verify' else self.settings.llm_answer_tokens,
+                    'model':(self.settings.llm_classifier_model or self.settings.llm_model) if stage=='classify' else self.settings.llm_model,'temperature':0,'max_tokens':2048 if stage=='classify' else 2048 if stage=='verify' else self.settings.llm_answer_tokens,
                     'response_format':{'type':'json_object'},'messages':messages})
                 response.raise_for_status()
         except httpx.TimeoutException as exc:raise LegalError('llm_timeout') from exc

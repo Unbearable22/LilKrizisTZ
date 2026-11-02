@@ -23,3 +23,11 @@ class VerifiedPipelineTests(unittest.TestCase):
   with patch.object(p,'context_for_task',AsyncMock(return_value={'prompt':'Правила','fragments':[{'id':'known','title':'Акт','citation':'Статья 1','text':'Оплата труда предусмотрена законом.','demo':False}],'trace':[]})):
    result=asyncio.run(p.run('Не платят зарплату',{}))
   self.assertEqual(result['status'],'error')
+ def test_local_reads_share_global_eight_document_budget(self):
+  p=LegalPipeline('knowledge',DemoModel(),False)
+  task={'function_id':'legal_help','legal_topic':'land','formulation':'образование участка'}
+  budget=RequestBudget(articles_left=1)
+  with patch('land_assistant.legal.pipeline.LocalLegalMCP') as local:
+   local.return_value.context=AsyncMock(return_value={'prompt':'Правила','trace':[],'fragments':[{'id':'a','text':'Первый'},{'id':'b','text':'Второй'}]})
+   result=asyncio.run(p.context_for_task(task,budget=budget,as_of_date=__import__('datetime').datetime.now(__import__('zoneinfo').ZoneInfo('Europe/Moscow')).date().isoformat()))
+  self.assertEqual(len(result['fragments']),1);self.assertEqual(budget.articles_left,0)

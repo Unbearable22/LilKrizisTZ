@@ -24,3 +24,8 @@ class ReferenceValidationTests(unittest.TestCase):
         from land_assistant.legal.privacy import has_references
         self.assertFalse(has_references('Гарантийный срок и гарантия качества.'))
         self.assertTrue(has_references('Материал сервиса ГАРАНТ.'))
+
+    def test_generic_legislation_phrase_is_not_an_unread_named_act(self):
+        from land_assistant.legal.privacy import has_references
+        self.assertFalse(has_references('Кроме случаев, предусмотренных законодательством о кадастровой оценке.'))
+        self.assertTrue(has_references('Предусмотрено законом о защите прав потребителей.'))

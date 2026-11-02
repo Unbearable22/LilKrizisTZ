@@ -80,9 +80,12 @@ class LegalPipeline:
             try:return await ConsultantLegalMCP(self.root,cache_root).context(search_query(task['formulation'],task['legal_topic']),legal_topic=task['legal_topic'],as_of_date=as_of_date,budget=budget)
             finally:budget.context_left+=reserved;budget.articles_left+=reserved_articles
         if as_of_date!=datetime.now(ZoneInfo('Europe/Moscow')).date().isoformat():raise SourceError('source_edition_unknown')
-        context=await LocalLegalMCP(self.root,demo=self.demo).context(task['formulation'])
+        if budget.articles_left<=0:raise SourceError('source_budget_exhausted')
+        read_cap=min(6,budget.articles_left)
+        context=await LocalLegalMCP(self.root,demo=self.demo).context(task['formulation'],max_reads=read_cap)
+        budget.articles_left-=min(read_cap,context.get('reads_used',len(context['fragments'])))
         chosen=[];task_remaining=min(6000,budget.context_left) if re.search(r'прод|купл',task['formulation'],re.I) else budget.context_left
-        for fragment in context['fragments']:
+        for fragment in context['fragments'][:read_cap]:
             if len(fragment['text'])<=task_remaining:chosen.append(fragment);budget.context_left-=len(fragment['text']);task_remaining-=len(fragment['text'])
         if len(chosen)!=len(context['fragments']):context['limitations']=[*context.get('limitations',[]),'Часть норм не вошла в первоначальный контекст; ответ ограничивается прочитанными фрагментами.']
         if not chosen and context['fragments']:raise SourceError('source_budget_exhausted')
