@@ -14,6 +14,19 @@ import webbrowser
 
 ROOT = Path(__file__).resolve().parents[1]
 
+def launch_identity(*,demo,speech):
+    """Opaque version/config identity; runtime cache never changes this value."""
+    digest=hashlib.sha256()
+    paths=[]
+    for folder in ('land_assistant','groundAndLaw','knowledge','scripts'):
+        paths.extend(p for p in (ROOT/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix not in ('.pyc','.pyo'))
+    paths.extend(p for p in (ROOT/'.env',ROOT/'requirements-legal.txt',ROOT/'requirements-speech.txt') if p.is_file())
+    for path in sorted(paths):
+        digest.update(str(path.relative_to(ROOT)).encode('utf-8'));digest.update(b'\0');digest.update(path.read_bytes());digest.update(b'\0')
+    effective={k:v for k,v in os.environ.items() if k.startswith('LLM_') or k in ('DATA_DIR','CONSULTANT_CACHE_DIR')}
+    digest.update(json.dumps({'demo':demo,'speech':speech,'settings':effective},sort_keys=True).encode('utf-8'))
+    return digest.hexdigest()
+
 def venv_python(root, windows=None):
     windows = os.name == 'nt' if windows is None else windows
     return root / ('Scripts/python.exe' if windows else 'bin/python')
@@ -81,10 +94,11 @@ def stop_background(process):
         except subprocess.TimeoutExpired:
             process.kill();process.wait()
 
-def app_running(url):
+def app_running(url,launch_id=None):
     try:
         with urllib.request.urlopen(url + '/api/legal-help/config', timeout=1) as response:
-            return json.load(response).get('mode') in ('live', 'demo')
+            config=json.load(response)
+            return config.get('mode') in ('live', 'demo') and (launch_id is None or config.get('launch_id')==launch_id)
     except Exception:
         return False
 
@@ -92,11 +106,11 @@ def port_occupied(port):
     with socket.socket() as probe:
         return probe.connect_ex(('127.0.0.1', port)) == 0
 
-def choose_endpoint(port, auto=False):
+def choose_endpoint(port, auto=False,launch_id=None):
     for candidate in range(port, min(port + (20 if auto else 1), 65536)):
         if not port_occupied(candidate):
             return candidate, False
-        if app_running(f'http://127.0.0.1:{candidate}'):
+        if app_running(f'http://127.0.0.1:{candidate}',**({'launch_id':launch_id} if launch_id is not None else {})):
             return candidate, True
     raise ValueError(f'No available web port starting from {port}. Close another application or choose --port.')
 
@@ -125,7 +139,8 @@ def main(argv=None):
     if args.check_config:
         print('Model settings are configured.')
         return 0
-    args.port, running = choose_endpoint(args.port, args.auto_port)
+    identity=launch_identity(demo=args.demo,speech=not args.no_speech)
+    args.port, running = choose_endpoint(args.port, args.auto_port,launch_id=identity)
     url = f'http://127.0.0.1:{args.port}'
     if running:
         print(f'Web chat is already running: {url}')
@@ -147,6 +162,7 @@ def main(argv=None):
             os.environ['SPEECH_DISABLED'] = '1'
             print('Voice dependencies are unavailable. Continuing with text chat.', flush=True)
     command = [str(python), '-m', 'land_assistant', 'web', '--port', str(args.port)]
+    os.environ['WEB_LAUNCH_ID']=identity
     if args.demo:
         command.append('--demo')
     print(f'Starting {url}. Keep this window open; Ctrl+C stops the server.', flush=True)
@@ -159,7 +175,7 @@ def main(argv=None):
         while time.monotonic() < deadline:
             if child.poll() is not None:
                 return child.returncode or 1
-            if app_running(url):
+            if app_running(url,launch_id=identity):
                 print(f'Ready: {url}', flush=True)
                 if not args.no_browser:
                     webbrowser.open(url)

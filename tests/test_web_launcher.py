@@ -40,3 +40,20 @@ class LauncherTests(unittest.TestCase):
     self.assertEqual(proc.call_count,1);self.assertTrue(os.environ.get('SPEECH_READY_FILE'));self.assertNotIn('LLM_API_KEY',proc.call_args.kwargs['env'])
    with patch.object(launcher,'ROOT',root),patch('subprocess.Popen',side_effect=OSError('download unavailable')),patch('sys.stdout',out):
     self.assertIsNone(launcher.start_speech_download(Path('python')))
+ def test_launch_identity_changes_with_code_and_model_but_not_runtime_cache(self):
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d);(root/'land_assistant').mkdir();(root/'land_assistant/app.py').write_text('first');(root/'data').mkdir()
+   with patch.object(launcher,'ROOT',root),patch.dict(os.environ,{'LLM_MODEL':'first'},clear=True):
+    first=launcher.launch_identity(demo=False,speech=True);(root/'data/cache').write_text('new data')
+    self.assertEqual(first,launcher.launch_identity(demo=False,speech=True))
+    (root/'land_assistant/app.py').write_text('second');second=launcher.launch_identity(demo=False,speech=True);self.assertNotEqual(first,second)
+    os.environ['LLM_MODEL']='second';self.assertNotEqual(second,launcher.launch_identity(demo=False,speech=True))
+    self.assertNotEqual(launcher.launch_identity(demo=False,speech=True),launcher.launch_identity(demo=True,speech=True))
+ def test_old_server_is_not_reused_for_updated_launcher(self):
+  import io
+  with patch('urllib.request.urlopen',return_value=io.BytesIO(b'{"mode":"live","launch_id":"old"}')):
+   self.assertFalse(launcher.app_running('http://127.0.0.1:8080',launch_id='new'))
+  with patch('urllib.request.urlopen',return_value=io.BytesIO(b'{"mode":"live","launch_id":"new"}')):
+   self.assertTrue(launcher.app_running('http://127.0.0.1:8080',launch_id='new'))
+  with patch.object(launcher,'port_occupied',side_effect=lambda p:p==8080),patch.object(launcher,'app_running',return_value=False) as running:
+   self.assertEqual(launcher.choose_endpoint(8080,True,launch_id='new'),(8081,False));self.assertEqual(running.call_args.kwargs['launch_id'],'new')

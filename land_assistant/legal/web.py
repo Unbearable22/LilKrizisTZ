@@ -64,7 +64,9 @@ def make_web_handler(pipeline,static_root):
             if not self.allowed_host():self.error(403,'Неподдерживаемый адрес локального сервера.');return
             path=urlsplit(self.path).path
             if path=='/api/legal-help/config':
-                self.reply(200,{'mode':'demo' if pipeline.demo else 'live','max_question_length':8000,'notice':'Демонстрационный режим без нейросети: показ работы сервиса, без юридического заключения.' if pipeline.demo else 'Юридическая помощь по праву РФ: земельные и другие вопросы с учётом доступных нормативных материалов.','attachments_supported':False})
+                launch_id=os.getenv('WEB_LAUNCH_ID','')
+                identity={'launch_id':launch_id} if len(launch_id)==64 and all(c in '0123456789abcdef' for c in launch_id) else {}
+                self.reply(200,{'mode':'demo' if pipeline.demo else 'live','max_question_length':8000,'notice':'Демонстрационный режим без нейросети: показ работы сервиса, без юридического заключения.' if pipeline.demo else 'Юридическая помощь по праву РФ: земельные и другие вопросы с учётом доступных нормативных материалов.','attachments_supported':False,**identity})
             elif path in STATIC:
                 target=root/STATIC[path]
                 if not target.is_file() or target.resolve().parent!=root:
