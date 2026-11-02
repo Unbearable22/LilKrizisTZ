@@ -4,6 +4,7 @@ import logging
 import time
 import uuid
 from .errors import LegalError
+from .answer_evidence import public_evidence,validate_claim_sections
 from .mcp_client import LocalLegalMCP
 from .privacy import has_references, has_unverified_references
 from .task_catalog import ALL_FIELDS,allowed_fields,validate_tasks,normalize_scope,search_query
@@ -90,12 +91,9 @@ class LegalPipeline:
         empty={'prompt':'','fragments':[],'trace':['public.fallback'],'limitations':[]}
         if self.demo or budget.rate_limited or time.monotonic()>budget.deadline-15:return empty
         topic=task['legal_topic']
-        if not re.search(r'прод|купл|сделк|оформлен',task['formulation'],re.I):return empty
-        if topic not in ('land','tax','civil'):return empty
-        if topic=='civil' and task['function_id']=='general_legal_help':return empty
-        if topic=='land':topic='civil'
+        if budget.discovery_left<=0 or budget.articles_left<=0 or budget.context_left<100:return empty
         try:
-            context=await ConsultantLegalMCP(self.root,Path(os.getenv('CONSULTANT_CACHE_DIR','data/consultant-cache'))).context(search_query(task['formulation'],topic),legal_topic=topic,as_of_date=as_of_date,budget=budget,fallback=True)
+            context=await ConsultantLegalMCP(self.root,Path(os.getenv('CONSULTANT_CACHE_DIR','data/consultant-cache')),function_id=task['function_id']).context(search_query(task['formulation'],topic),legal_topic=topic,as_of_date=as_of_date,budget=budget,fallback=True)
             context['trace'].append('public.fallback');return context
         except Exception as exc:
             logging.getLogger(__name__).warning('public_fallback_failed code=%s',getattr(exc,'code','source_unavailable'))
@@ -103,13 +101,13 @@ class LegalPipeline:
     @staticmethod
     def merge_context(primary,extra):
         dates=[c['source_checked_at'] for c in (primary,extra) if c.get('source_checked_at')]
-        return {**primary,'fragments':primary['fragments']+extra['fragments'],'trace':extra.get('trace',[]),'limitations':primary.get('limitations',[])+extra.get('limitations',[]),'source_checked_at':min(dates) if dates else None}
+        return {**primary,'fragments':list({f['id']:f for f in primary['fragments']+extra['fragments']}.values()),'trace':extra.get('trace',[]),'limitations':primary.get('limitations',[])+extra.get('limitations',[]),'source_checked_at':min(dates) if dates else None}
     async def run(self,question,intake,history=None):
         started=time.monotonic();stage='input';run_id=uuid.uuid4().hex;trace=['input.validate']
         base={'status':'error','question':question if isinstance(question,str) else '', 'tasks':[], 'missing_fields':[], 'answer':'','sources':[], 'mode':'demo' if self.demo else 'live','trace':trace,'limitations':[], 'diagnostics':{'run_id':run_id}}
         answers=[];bases=[];sources={};limits=[];questions={};outcomes=[];checked=[];partial=False;unanswered=False;errors=[]
         def finish():
-            return {**base,'status':'partial_answer' if partial or unanswered else 'answered','answer':'\n\n'.join(answers),'sources':list(sources.values()),'legal_bases':bases,'missing_fields':list(questions.values())[:3],'limitations':list(dict.fromkeys(limits)),'task_outcomes':outcomes,'source_checked_at':min(checked) if checked else None}
+            return {**base,'status':'partial_answer' if partial or unanswered else 'answered','answer':'\n\n'.join(answers),'sources':list(sources.values()),'evidence':public_evidence(sources.values()),'legal_bases':bases,'missing_fields':list(questions.values())[:3],'limitations':list(dict.fromkeys(limits)),'task_outcomes':outcomes,'source_checked_at':min(checked) if checked else None}
         def diagnostic(exc):
             code=getattr(exc,'code','pipeline_timeout' if isinstance(exc,TimeoutError) else 'mcp_failure' if stage=='mcp_context' else 'invalid_plan' if stage in ('classify','plan_validate') else 'internal_error')
             data={'run_id':run_id,'stage':stage,'code':code,'elapsed_seconds':round(time.monotonic()-started,2)}
@@ -166,12 +164,30 @@ class LegalPipeline:
                                     result=primary_result;context={**primary_context,'limitations':primary_context.get('limitations',[])+['Дополнительная проверка не завершена; сохранён первоначальный проверенный разбор.']};fragments=context['fragments'];arguments=primary_arguments
                                 trace.append('llm.answer_fallback');stage='answer_validate'
                         trace.append('answer.validate')
+                        repaired=False
                         try:validate_answer(result,fragments,scope=task['scope'])
                         except LegalError as exc:
                             if exc.code!='visible_references' or not callable(getattr(self.model,'rewrite_answer',None)):raise
-                            stage='rewrite';trace.append('llm.rewrite');result=await self.model.rewrite_answer(draft=result,**arguments);stage='rewrite_validate';validate_answer(result,fragments,scope=task['scope'])
+                            repaired=True;stage='rewrite';trace.append('llm.rewrite');result=await self.model.rewrite_answer(draft=result,**arguments);stage='rewrite_validate';validate_answer(result,fragments,scope=task['scope'])
                         if result.get('status')=='insufficient_sources':
                             base['diagnostics'].update(code='insufficient_context',stage=stage);unanswered=True;outcomes.append({'task_id':task['task_id'],'status':'insufficient_sources','summary':task['formulation'][:200]+': прочитанных материалов недостаточно.'});continue
+                        if getattr(self.model,'require_grounded_claims',False):
+                            for attempt in range(2):
+                                try:
+                                    stage='evidence_validate';validate_claim_sections(result,fragments)
+                                    if time.monotonic()>budget.deadline-5:raise SourceError('source_budget_exhausted')
+                                    stage='evidence_semantic_check'
+                                    async with asyncio.timeout(min(20,max(.1,budget.deadline-time.monotonic()-1))):
+                                        supported=await self.model.verify_evidence(result=result,fragments=fragments)
+                                    trace.append('evidence.semantic_check')
+                                    if not supported:raise LegalError('unsupported_claims')
+                                    break
+                                except LegalError as exc:
+                                    if repaired or attempt or budget.deadline-time.monotonic()<30 or not callable(getattr(self.model,'rewrite_answer',None)):raise
+                                    repaired=True;stage='evidence_repair'
+                                    result=await self.model.rewrite_answer(draft=result,**arguments)
+                                    validate_answer(result,fragments,scope=task['scope'])
+                                    if result.get('status')=='insufficient_sources':raise LegalError('unsupported_claims')
                         if getattr(self.model,'require_legal_bases',False) and not result.get('legal_bases'):raise LegalError('invalid_legal_bases')
                         # Only now commit a task's checked result. Failed later tasks cannot erase it.
                         text=result['answer'];citations=list(result['citations']);is_partial=result.get('status')=='partial_answer'
