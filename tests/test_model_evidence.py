@@ -49,3 +49,45 @@ class ModelEvidenceTests(unittest.TestCase):
   with patch.object(model,'_json',AsyncMock(return_value={'supported':False})) as call:
    asyncio.run(model.verify_evidence(result={},fragments=[],intake={'amount':'10000'}))
   payload=__import__('json').loads(call.call_args.args[0][1]['content']);self.assertEqual(payload['intake'],{'amount':'10000'});self.assertNotIn('history',payload)
+ def test_optional_reasoning_budget_applies_only_to_verifier(self):
+  import os,httpx,json
+  with patch.dict(os.environ,{'LLM_URL':'https://fixture.invalid','LLM_MODEL':'answer-model','LLM_VERIFIER_REASONING_EFFORT':'low'},clear=True):
+   settings=Settings.from_env()
+  model=LiveModel(settings);real=httpx.AsyncClient;payloads=[]
+  def respond(request):
+   payloads.append(json.loads(request.content));return httpx.Response(200,json={'choices':[{'message':{'content':'{"ok":true}'}}]})
+  with patch('land_assistant.legal.model.httpx.AsyncClient',side_effect=lambda **kw:real(transport=httpx.MockTransport(respond),**kw)):
+   for stage in ('classify','answer','verify'):asyncio.run(model._json([{'role':'system','content':'JSON'}],stage=stage))
+  self.assertNotIn('reasoning_effort',payloads[0]);self.assertNotIn('reasoning_effort',payloads[1]);self.assertEqual(payloads[2].get('reasoning_effort'),'low')
+ def test_default_verifier_does_not_send_reasoning_parameter(self):
+  import httpx,json
+  model=LiveModel(Settings(Path('data'),llm_url='https://fixture.invalid',llm_model='fixture'));real=httpx.AsyncClient;payloads=[]
+  def respond(request):
+   payloads.append(json.loads(request.content));return httpx.Response(200,json={'choices':[{'message':{'content':'{"ok":true}'}}]})
+  with patch('land_assistant.legal.model.httpx.AsyncClient',side_effect=lambda **kw:real(transport=httpx.MockTransport(respond),**kw)):
+   asyncio.run(model._json([{'role':'system','content':'JSON'}],stage='verify'))
+  self.assertNotIn('reasoning_effort',payloads[0])
+ def test_invalid_reasoning_budget_is_rejected_before_request(self):
+  import os
+  with patch.dict(os.environ,{'LLM_VERIFIER_REASONING_EFFORT':'arbitrary'},clear=True):
+   with self.assertRaisesRegex(ValueError,'LLM_VERIFIER_REASONING_EFFORT'):Settings.from_env()
+ def test_answer_uses_short_handles_and_restores_only_reference_fields(self):
+  import json
+  model=LiveModel(Settings(Path('data'),llm_url='https://fixture.invalid',llm_model='fixture'))
+  fid='idx_27b6c30abdcc8e16:8e958715b563e23e:0';question=fid
+  reply={'answer':'1','citations':['1','9'],'scenarios':[{'condition':'1','outcome':'1','citations':['1']}],'legal_bases':[{'fragment_id':'1','explanation':'1'}]}
+  with patch.object(model,'_json',AsyncMock(return_value=reply)) as call:
+   result=asyncio.run(model.answer(original_question=question,formulation='1',intake={},prompt='Правила',fragments=[{'id':fid,'text':'Подтверждённый текст.'}]))
+  payload=json.loads(call.call_args.args[0][1]['content'])
+  self.assertEqual(payload['fragments'][0]['id'],'1');self.assertEqual(payload['original_question'],question)
+  self.assertEqual(result['citations'],[fid,'9']);self.assertEqual(result['scenarios'][0]['citations'],[fid]);self.assertEqual(result['legal_bases'][0]['fragment_id'],fid)
+  self.assertEqual(result['answer'],'1');self.assertEqual(result['scenarios'][0]['outcome'],'1');self.assertEqual(result['legal_bases'][0]['explanation'],'1')
+ def test_grounding_repair_uses_same_handle_contract_without_changing_quotes(self):
+  import json
+  model=LiveModel(Settings(Path('data'),llm_url='https://fixture.invalid',llm_model='fixture'));fid='long-source-id'
+  draft={'answer':'1','citations':[fid],'claims':[{'section':'answer','evidence_ids':[fid],'anchors':[{'fragment_id':fid,'quote':fid}]}]}
+  for method in (model.rewrite_answer,model.repair_grounding):
+   with patch.object(model,'_json',AsyncMock(return_value={'citations':['1']})) as call:
+    result=asyncio.run(method(draft=draft,original_question='1',formulation='Задача',intake={},prompt='Правила',fragments=[{'id':fid,'text':fid}]))
+   payload=json.loads(call.call_args.args[0][1]['content']);self.assertEqual(payload['draft']['citations'],['1']);self.assertEqual(payload['draft']['claims'][0]['anchors'][0]['quote'],fid);self.assertEqual(result['citations'],[fid])
+  self.assertEqual(draft['citations'],[fid])

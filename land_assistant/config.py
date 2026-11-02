@@ -24,9 +24,13 @@ class Settings:
     llm_answer_tokens: int = 6144
     consultant_cache_dir: Path = Path("data/consultant-cache")
     llm_verifier_model: str = ''
+    llm_verifier_reasoning_effort: str = ''
 
     @classmethod
     def from_env(cls):
+        verifier_effort=os.getenv('LLM_VERIFIER_REASONING_EFFORT','').strip()
+        if verifier_effort not in ('','low','medium','high'):
+            raise ValueError('LLM_VERIFIER_REASONING_EFFORT: use low, medium, high or leave empty.')
         return cls(Path(os.getenv('DATA_DIR', 'data')),
                    os.getenv('TELEGRAM_BOT_TOKEN', ''),
                    tuple(int(x.strip()) for x in os.getenv('ALLOWED_TELEGRAM_IDS', '').split(',') if x.strip()),
@@ -40,4 +44,4 @@ class Settings:
                    os.getenv('LLM_CLASSIFIER_MODEL',''),
                    min(12000,max(1024,int(os.getenv('LLM_ANSWER_TOKENS','6144')))),
                    Path(os.getenv('CONSULTANT_CACHE_DIR','data/consultant-cache')),
-                   os.getenv('LLM_VERIFIER_MODEL',''))
+                   os.getenv('LLM_VERIFIER_MODEL',''),verifier_effort)
