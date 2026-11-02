@@ -16,6 +16,12 @@ class ConsultantHTTP:
     async def fetch(self,url,*,budget,conditional_headers=None):
         url=allowed_url(url);budget.require();started=time.monotonic()
         try:
+            if self.transport is None:
+                from .trusted_http import fetch_document
+                await asyncio.sleep(max(0,self.pace-(time.monotonic()-self.last_start)))
+                self.last_start=time.monotonic()
+                fetched=await fetch_document(url,deadline=min(budget.deadline,time.monotonic()+budget.network_seconds_left))
+                return DocumentPage(fetched.final_url,200,{'content-type':fetched.content_type},fetched.body.decode('utf-8',errors='strict'),fetched.fetched_at)
             async with asyncio.timeout(min(25,budget.network_seconds_left,max(.01,budget.deadline-time.monotonic()))):
                 async with httpx.AsyncClient(transport=self.transport,follow_redirects=False,trust_env=False,timeout=10) as client:
                     for _ in range(4):
@@ -33,5 +39,8 @@ class ConsultantHTTP:
                             text=bytes(body).decode(response.encoding or 'utf-8',errors='replace')
                             return DocumentPage(url,response.status_code,dict(response.headers),text,datetime.now(timezone.utc).isoformat())
                     raise SourceError('source_redirect_limit')
-        except (httpx.HTTPError,TimeoutError) as exc:raise SourceError('source_unavailable') from exc
+        except SourceError as exc:
+            if exc.code=='source_rate_limit':budget.rate_limited=True
+            raise
+        except (httpx.HTTPError,TimeoutError,UnicodeError) as exc:raise SourceError('source_unavailable') from exc
         finally:budget.network_seconds_left-=time.monotonic()-started
