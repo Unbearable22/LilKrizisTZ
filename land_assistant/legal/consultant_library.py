@@ -20,6 +20,8 @@ class ConsultantLibrary:
         if cached:
             if cached['headers'].get('etag'):headers['If-None-Match']=cached['headers']['etag']
             if cached['headers'].get('last-modified'):headers['If-Modified-Since']=cached['headers']['last-modified']
+        if budget.documents_left<=0:raise SourceError('source_budget_exhausted')
+        budget.documents_left-=1
         page=await self.http.fetch(url,budget=budget,conditional_headers=headers)
         if page.status==304:
             if not cached:raise SourceError('source_parse_error')
@@ -47,6 +49,10 @@ class ConsultantLibrary:
                 frequency=Counter(word for item in parsed['toc'] for word in terms(item['title']))
                 for item in parsed['toc']:
                     title_words=terms(item['title']);score=sum(math.log(1+(len(parsed['toc'])+1)/(frequency[word]+1)) for word in words & title_words)/(1+.02*len(title_words))
+                    if legal_topic=='consumer' and re.search(r'недостат|отсутствие.*чека',query,re.I):
+                        number=re.search(r'Статья\s+(\d+)',item['title'])
+                        if number and number.group(1) in ('18','19','22'):score+=1000-10*('18','19','22').index(number.group(1))
+                    if legal_topic=='land' and re.search(r'изъят',query,re.I) and re.search(r'Статья\s+(49|56\.[2-9])(?!\d)',item['title']):score+=1000
                     if re.search(r'продаж.*недвижим',query,re.I):
                         preferred=['217.1','220','224','214.10'] if legal_topic=='tax' else ['550','551','554','555'] if legal_topic=='civil' else []
                         number=re.search(r'Статья\s+(\d+(?:\.\d+)?)',item['title'])
@@ -76,7 +82,8 @@ class ConsultantLibrary:
                     if current and len(current)+len(line)+1>4000:pieces.append(current);current=''
                     current=(current+'\n'+line).strip()
                 if current:pieces.append(current)
-                for index,piece in enumerate(pieces):
+                ranked=sorted(enumerate(pieces),key=lambda row:(0 if row[0]==0 else 1,-len(words & terms(row[1]))))[:3]
+                for index,piece in sorted(ranked):
                     if len(piece)>budget.context_left:omitted=True;continue
                     document_id='cp_'+root['id']+'_'+hashlib.sha256(item['url'].encode()).hexdigest()[:8]
                     fragment={'document_id':document_id,'title':parent['title'],'citation':item['title'],'act_designation':parent['act_designation'],'version':parent['edition_label'],'source_url':page.canonical_url,'effective_from':parent['effective_from'],'text':piece,'page_hash':page_hash,'part_index':index,'demo':False,'partial':len(pieces)>1 or omitted,'retrieved_at':page.checked_at,'last_checked_at':page.checked_at,'extraction_status':'verified_current','scope_note':parent['scope_note']}

@@ -8,6 +8,8 @@ from .public_sources import official_fragments
 
 def create_server(root,cache_root,budget=None):
     root=Path(root);library=ConsultantLibrary(root/'consultant/roots.json',cache_root);budget=budget or RequestBudget();server=FastMCP('consultant-general-legal',log_level='ERROR')
+    from .source_tools import attach_source_tools
+    attach_source_tools(server,root,cache_root,budget)
     @server.prompt(name='general_legal_help')
     def general_legal_help()->str:
         text=(root/'prompts/general_legal_help.txt').read_text().strip()

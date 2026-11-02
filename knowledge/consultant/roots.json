@@ -121,6 +121,15 @@
       ],
       "label": "Об исполнительном производстве",
       "enabled": true
+    },
+    {
+      "id": "land",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_33773/",
+      "topics": [
+        "land"
+      ],
+      "label": "ЗК РФ",
+      "enabled": true
     }
   ]
 }

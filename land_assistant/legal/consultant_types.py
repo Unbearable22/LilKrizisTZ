@@ -14,6 +14,8 @@ class RequestBudget:
     context_left:int=20000
     network_seconds_left:float=25
     rate_limited:bool=False
+    discovery_left:int=2
+    documents_left:int=6
     def require(self):
         if self.rate_limited:raise SourceError('source_rate_limit')
         if time.monotonic()>=self.deadline or self.network_seconds_left<=0:raise SourceError('source_budget_exhausted')

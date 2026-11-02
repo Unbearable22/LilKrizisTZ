@@ -29,15 +29,14 @@ async def official_fragments(query,topic,as_of_date,budget,library):
  if as_of_date!=today:raise SourceError('source_edition_unknown')
  budget.take('root');started=time.monotonic()
  try:
-  async with httpx.AsyncClient(follow_redirects=False,trust_env=False,timeout=min(10,budget.network_seconds_left,max(.1,budget.deadline-time.monotonic()))) as client:
-   async with client.stream('GET',allowed_public_url(FNS_SALE),headers={'User-Agent':'GroundAndLaw/0.1 official public reference reader'}) as response:
-    if response.status_code==429:budget.rate_limited=True;raise SourceError('source_rate_limit')
-    if response.status_code!=200:raise SourceError('source_unavailable')
-    data=bytearray()
-    async for chunk in response.aiter_bytes():
-     data.extend(chunk)
-     if len(data)>2*1024*1024:raise SourceError('source_size_limit')
-    text=parse_fns(bytes(data).decode('utf-8',errors='strict'),as_of_date)
+  from .trusted_http import fetch_document
+  if budget.documents_left<=0:raise SourceError('source_budget_exhausted')
+  budget.documents_left-=1
+  fetched=await fetch_document(allowed_public_url(FNS_SALE),deadline=min(budget.deadline,time.monotonic()+budget.network_seconds_left))
+  text=parse_fns(fetched.body.decode('utf-8',errors='strict'),as_of_date)
+ except SourceError as exc:
+  if exc.code=='source_rate_limit':budget.rate_limited=True
+  raise
  except (httpx.HTTPError,UnicodeError):raise SourceError('source_unavailable') from None
  finally:budget.network_seconds_left-=time.monotonic()-started
  budget.require()
