@@ -87,3 +87,22 @@ class LibraryTests(unittest.TestCase):
     hits=await lib.search('паспорт утрата хищение','administrative','2026-10-22',RequestBudget())
     self.assertTrue(hits);self.assertTrue(all(f['citation'].startswith('Статья 9.') for f in hits));self.assertEqual(http.calls,2)
   asyncio.run(run())
+
+ def test_sale_document_search_includes_registration_law_and_contract(self):
+  reg='https://www.consultant.ru/document/cons_doc_LAW_182661/'
+  class SaleHTTP:
+   async def fetch(self,url,**kw):
+    root=reg if url.startswith(reg) else ROOT
+    number='18' if root==reg else '550'
+    heading=f'Статья {number}. '+('Представление заявления и документов' if root==reg else 'Форма договора продажи недвижимости')
+    body=f'<a href="{root+"a"*40+"/"}">{heading}</a>' if url==root else f'<p class="doc-style">{heading}</p><p>Документы и заявление представляются заявителем.</p>'
+    title='Закон (ред. от 01.01.2026)' if url==root else heading
+    return DocumentPage(url,200,{},f'<h1>{title}</h1><div class="document-page__content">{body}</div>','2026-10-22T00:00:00+00:00')
+  async def run():
+   with tempfile.TemporaryDirectory() as tmp:
+    p=Path(tmp);p.joinpath('roots.json').write_text(json.dumps({'roots':[{'id':'civil2','url':ROOT,'topics':['civil'],'enabled':True},{'id':'registration','url':reg,'topics':['civil'],'enabled':True}]}))
+    now=lambda:__import__('datetime').datetime(2026,10,22,1,tzinfo=__import__('datetime').timezone.utc)
+    lib=ConsultantLibrary(p/'roots.json',p/'cache',http=SaleHTTP(),now=now)
+    hits=await lib.search('договор продажи недвижимости документы государственная регистрация','civil','2026-10-22',RequestBudget())
+    self.assertEqual({f['citation'].split('.')[0] for f in hits},{'Статья 18','Статья 550'})
+  asyncio.run(run())

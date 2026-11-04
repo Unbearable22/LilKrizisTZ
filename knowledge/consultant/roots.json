@@ -141,6 +141,16 @@
       ],
       "label": "О гражданстве Российской Федерации, включая паспорт",
       "enabled": true
+    },
+    {
+      "id": "registration",
+      "url": "https://www.consultant.ru/document/cons_doc_LAW_182661/",
+      "topics": [
+        "civil",
+        "land"
+      ],
+      "label": "218-ФЗ О государственной регистрации недвижимости",
+      "enabled": true
     }
   ]
 }

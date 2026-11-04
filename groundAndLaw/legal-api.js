@@ -134,7 +134,7 @@
                 await this.onResult(chatId,requestId,publicResult(result));
             }catch(error){
                 if(this.pending.get(chatId)===request){
-                    await this.onResult(chatId,requestId,publicResult({status:'error',answer:error.name==='AbortError'?'Истекло время ожидания. Автоматический повтор не выполнялся.':(error.message || 'Сервер недоступен.'),missing_fields:[]}));
+                    await this.onResult(chatId,requestId,publicResult({status:'error',answer:error.name==='AbortError'?'Истекло время ожидания. Автоматический повтор не выполнялся.':(error instanceof TypeError?'Соединение с сервером прервалось. Проверьте связь и повторите запрос. Предыдущий ответ, если он был, сохранён.':(error.message || 'Сервер недоступен.')),missing_fields:[]}));
                 }
             }finally{
                 clearTimeout(timer);

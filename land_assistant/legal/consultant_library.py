@@ -38,7 +38,7 @@ class ConsultantLibrary:
         roots=[r for r in self.roots if r.get('enabled') and legal_topic in r['topics'] and (r['id']!='enforcement' or re.search(r'исполнительн|пристав',query,re.I))]
         if 'паспорт' in query and any(r['id']=='citizenship' for r in roots):roots=[r for r in roots if r['id']=='citizenship']
         if not roots:raise SourceError('search_no_candidates')
-        if legal_topic=='civil' and re.search(r'продаж.*недвижим',query,re.I):roots=[r for r in roots if r['id']=='civil2']
+        if legal_topic=='civil' and re.search(r'продаж.*недвижим',query,re.I):roots=sorted([r for r in roots if r['id'] in ('civil2','registration')],key=lambda r:0 if r['id']=='registration' else 1)
         if legal_topic=='tax' and re.search(r'продаж.*недвижим',query,re.I):roots=[r for r in roots if r['id']=='tax2']
         roots=roots[:budget.roots_left]
         passport_loss='паспорт' in query and bool(re.search(r'утрат|хищ',query,re.I))
@@ -61,7 +61,7 @@ class ConsultantLibrary:
                         if number and number.group(1) in ('18','19','22'):score+=1000-10*('18','19','22').index(number.group(1))
                     if legal_topic=='land' and re.search(r'изъят',query,re.I) and re.search(r'Статья\s+(49|56\.[2-9])(?!\d)',item['title']):score+=1000
                     if re.search(r'продаж.*недвижим',query,re.I):
-                        preferred=['217.1','220','224','214.10'] if legal_topic=='tax' else ['550','551','554','555'] if legal_topic=='civil' else []
+                        preferred=['217.1','220','224','214.10'] if legal_topic=='tax' else (['18','14'] if root['id']=='registration' else ['550','551','554','555']) if legal_topic=='civil' else []
                         number=re.search(r'Статья\s+(\d+(?:\.\d+)?)',item['title'])
                         if number and number.group(1) in preferred:score+=1000-10*preferred.index(number.group(1))
                     if score:candidates.append((score,root,parsed,item))

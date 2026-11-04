@@ -1,10 +1,14 @@
 import tempfile
 import unittest
+from unittest.mock import patch
+from datetime import datetime,timezone
 from land_assistant.legal.source_index import SourceIndex
 from land_assistant.legal.source_documents import VerifiedDocument
 
 class SourceIndexTests(unittest.TestCase):
- def test_hash_identity_search_atomic_replacement_and_freshness(self):
+ @patch("land_assistant.legal.source_index.datetime", wraps=datetime)
+ def test_hash_identity_search_atomic_replacement_and_freshness(self,clock):
+  clock.now.return_value=datetime(2026,11,2,11,tzinfo=timezone.utc)
   with tempfile.TemporaryDirectory() as folder:
    index=SourceIndex(folder+'/index.sqlite')
    def doc(text,checked='2026-11-02T10:00:00+00:00'):

@@ -49,7 +49,8 @@ class VerifiedSourceLibrary:
                 if exc.code in ('source_rate_limit','source_access_restricted'):raise
         # Reserve one root read for genuinely new documents when the catalog fails.
         reserved=1 if budget.roots_left>1 else 0
-        reserved_documents=3 if not refresh and budget.discovery_left>0 and budget.documents_left>=4 else 0
+        sale_documents=legal_topic=='civil' and bool(re.search(r'продаж.*недвижим',query,re.I))
+        reserved_documents=3 if not sale_documents and not refresh and budget.discovery_left>0 and budget.documents_left>=4 else 0
         budget.roots_left-=reserved
         budget.documents_left-=reserved_documents
         try:
@@ -80,6 +81,8 @@ class VerifiedSourceLibrary:
         return found
     @staticmethod
     def covered(query,topic,fragments):
+        if topic=='civil' and re.search(r'продаж.*недвижим',query,re.I):
+            return any('/cons_doc_LAW_182661/' in f.get('source_url','') and re.match(r'Статья\s+18(?!\d|\.\d)',f.get('citation','')) for f in fragments) and any('/cons_doc_LAW_9027/' in f.get('source_url','') and re.match(r'Статья\s+55[01](?!\d|\.\d)',f.get('citation','')) for f in fragments)
         if topic=='family' and 'алиментов' in query and 'несовершеннолетних детей' in query:
             numbers={m.group(1) for f in fragments if (m:=re.search(r'Статья\s+(\d+)(?!\d|\.\d)',f.get('citation',''),re.I))}
             return {'80','81','83'}<=numbers

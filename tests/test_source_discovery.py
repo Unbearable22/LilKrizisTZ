@@ -88,3 +88,9 @@ class DiscoveryTests(unittest.TestCase):
    with patch.object(lib.library,'search',exhaustive),patch.object(lib.library,'read',return_value=f):
     asyncio.run(lib.search('административная процедура','administrative',day,budget))
    self.assertGreaterEqual(budget.documents_left,3)
+ def test_sale_documents_cache_without_registration_rules_is_incomplete(self):
+  self.assertFalse(VerifiedSourceLibrary.covered('договор продажи недвижимости представление заявления и прилагаемых документов','civil',[{'citation':'Статья 550. Форма договора','source_url':'https://www.consultant.ru/document/cons_doc_LAW_9027/','text':'Договор составляется письменно.'}]))
+
+ def test_unrelated_civil_article_does_not_complete_sale_cache(self):
+  fragments=[{'citation':'Статья 18. Представление документов','source_url':'https://www.consultant.ru/document/cons_doc_LAW_182661/'}, {'citation':'Статья 702. Договор подряда','source_url':'https://www.consultant.ru/document/cons_doc_LAW_9027/'}]
+  self.assertFalse(VerifiedSourceLibrary.covered('договор продажи недвижимости','civil',fragments))

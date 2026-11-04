@@ -163,7 +163,6 @@ class LegalPipeline:
                         stage='answer';arguments=dict(original_question=question,formulation=task['formulation'],intake=intake,prompt=context['prompt'],fragments=fragments,scope=task['scope'])
                         if history:arguments['history']=history
                         result=await self.model.answer(**arguments);trace+=['llm.answer'];stage='answer_validate'
-                        if isinstance(result,dict) and context.get('coverage_gaps') and result.get('status')=='answered':result={**result,'status':'insufficient_sources'}
                         if isinstance(result,dict) and result.get('status') in ('insufficient_sources','partial_answer') and self.needs_source_expansion(result) and not fallback_used:
                             fallback_used=True;extra=await self.fallback_context(task,budget=budget,as_of_date=as_of_date)
                             if extra['fragments'] and any(self.fragment_key(f) not in {self.fragment_key(p) for p in fragments} for f in extra['fragments']):
@@ -215,11 +214,14 @@ class LegalPipeline:
                         if getattr(self.model,'require_legal_bases',False) and not result.get('legal_bases'):raise LegalError('invalid_legal_bases')
                         # Only now commit a task's checked result. Failed later tasks cannot erase it.
                         text=result['answer'];citations=list(result['citations']);is_partial=result.get('status')=='partial_answer'
+                        if context.get('coverage_gaps'):
+                            partial=True;limits.extend(context['coverage_gaps'])
                         if is_partial:
                             partial=True;text='Предварительный разбор: факты и документы не проверялись.\n\n'+text+'\n\nВозможные варианты:'
                             for branch in result['scenarios']:text+='\n• Если '+branch['condition'].strip()+', то '+branch['outcome'].strip();citations.extend(branch['citations'])
                             for key in result.get('missing_fields',[]):
                                 if key not in ('situation','goal') and key in allowed_fields(task['legal_topic']) and not intake.get(key,'').strip():questions[key]={'key':key,'label':FIELD_LABELS[key]}
+                        if is_partial and questions:text+='\n\nБолее точный ответ можно получить, если сообщить: '+', '.join(q['label'].lower() for q in questions.values())+'. Это необязательно для использования общего разбора.'
                         available={f['id']:f for f in fragments}
                         for b in result.get('legal_bases',[]):
                             f=available[b['fragment_id']];title=f['title'].split(' — часть')[0];title=(f.get('act_designation','')+' «'+title+'»') if f.get('act_designation') else title
@@ -232,7 +234,7 @@ class LegalPipeline:
                             refs.extend(task['task_id']+'/basis:'+str(i) for i,b in enumerate(result.get('legal_bases',[])) if c==b['fragment_id'])
                             previous=sources.get(c,{}).get('_claim_refs',[])
                             sources[c]={**{k:v for k,v in available[c].items() if k!='text'},'_claim_refs':sorted(set(previous+refs))}
-                        answers.append(text);limits.extend(context.get('limitations',[]));limits.extend(result.get('limitations',[]));outcomes.append({'task_id':task['task_id'],'status':'partial_answer' if is_partial else 'answered','summary':task['formulation'][:200]})
+                        answers.append(text);limits.extend(context.get('limitations',[]));limits.extend(result.get('limitations',[]));outcomes.append({'task_id':task['task_id'],'status':'partial_answer' if is_partial or context.get('coverage_gaps') else 'answered','summary':task['formulation'][:200]})
                         if context.get('source_checked_at'):checked.append(context['source_checked_at'])
                     except asyncio.CancelledError:raise
                     except Exception as exc:

@@ -158,3 +158,10 @@ test('generic legislation wording does not erase checked response',()=>{
  const {publicResult}=require('../groundAndLaw/legal-api.js');
  assert.equal(publicResult({status:'answered',answer:'Кроме случаев, предусмотренных законодательством о кадастровой оценке.'}).status,'answered');
 });
+
+test('network failure gives understandable message without raw browser error',async()=>{
+ const {LegalClient}=require('../groundAndLaw/legal-api.js');let result;
+ const client=new LegalClient({fetch:async()=>{throw new TypeError('Load failed');},onState:()=>{},onResult:async(c,r,v)=>{result=v;}});
+ await client.submit({chatId:'c',requestId:'q',question:'Документы для продажи?'});
+ assert.equal(result.status,'error');assert.doesNotMatch(result.answer,/Load failed/);assert.match(result.answer,/соединен|связ/i);
+});

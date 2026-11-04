@@ -115,3 +115,14 @@ class LegalPipelineTests(unittest.TestCase):
         r=asyncio.run(LegalPipeline(self.root,NoEvidence(),demo=True).run('Образование участка',self.intake))
         self.assertEqual(r['status'],'insufficient_sources')
         self.assertNotIn('Нельзя подтверждать требование',r['answer'])
+
+    def test_coverage_gap_preserves_checked_general_answer(self):
+        original=self.pipeline.context_for_task
+        async def limited(task,**kwargs):
+            context=await original(task,**kwargs)
+            return {**context,'coverage_gaps':['Не все связанные нормы прочитаны.']}
+        self.pipeline.context_for_task=limited
+        r=self.run_query('Как образовать участок?',{})
+        self.assertEqual(r['status'],'partial_answer')
+        self.assertTrue(r['sources'])
+        self.assertIn('Не все связанные нормы прочитаны.',r['limitations'])
