@@ -25,6 +25,7 @@ class Settings:
     consultant_cache_dir: Path = Path("data/consultant-cache")
     llm_verifier_model: str = ''
     llm_verifier_reasoning_effort: str = ''
+    llm_verify_timeout: float = 60
 
     @classmethod
     def from_env(cls):
@@ -44,4 +45,5 @@ class Settings:
                    os.getenv('LLM_CLASSIFIER_MODEL',''),
                    min(12000,max(1024,int(os.getenv('LLM_ANSWER_TOKENS','6144')))),
                    Path(os.getenv('CONSULTANT_CACHE_DIR','data/consultant-cache')),
-                   os.getenv('LLM_VERIFIER_MODEL',''),verifier_effort)
+                   os.getenv('LLM_VERIFIER_MODEL',''),verifier_effort,
+                   min(90,max(5,float(os.getenv('LLM_VERIFY_TIMEOUT','60')))))

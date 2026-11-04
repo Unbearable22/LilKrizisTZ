@@ -22,7 +22,8 @@ class VerifiedPipelineTests(unittest.TestCase):
   p=LegalPipeline('knowledge',Model(),False)
   with patch.object(p,'context_for_task',AsyncMock(return_value={'prompt':'Правила','fragments':[{'id':'known','title':'Акт','citation':'Статья 1','text':'Оплата труда предусмотрена законом.','demo':False}],'trace':[]})):
    result=asyncio.run(p.run('Не платят зарплату',{}))
-  self.assertEqual(result['status'],'error')
+  self.assertEqual(result['status'],'partial_answer');self.assertEqual(result['response_kind'],'general_guidance')
+  self.assertEqual(result['legal_bases'],[]);self.assertEqual(result['sources'],[]);self.assertNotIn('ДЕМОНСТРАЦИЯ',result['answer'])
  def test_local_reads_share_global_eight_document_budget(self):
   p=LegalPipeline('knowledge',DemoModel(),False)
   task={'function_id':'legal_help','legal_topic':'land','formulation':'образование участка'}
@@ -70,7 +71,7 @@ class VerifiedPipelineTests(unittest.TestCase):
   p=LegalPipeline('knowledge',Model(),False)
   with patch.object(p,'context_for_task',AsyncMock(return_value={'prompt':'Правила','fragments':[{'id':'f','title':'Документ об оплате','text':'Норма об оплате труда.','demo':False}],'trace':[]})):
    r=asyncio.run(p.run('Не платят зарплату',{}))
-  self.assertEqual(r['status'],'insufficient_sources');self.assertEqual(r['task_outcomes'][0]['status'],'insufficient_sources')
+  self.assertEqual(r['status'],'partial_answer');self.assertEqual(r['response_kind'],'general_guidance');self.assertEqual(r['legal_bases'],[]);self.assertEqual(r['task_outcomes'][0]['status'],'insufficient_sources')
  def test_pipeline_preserves_only_individually_verified_variants(self):
   from land_assistant.legal.answer_evidence import prepare_claims
   class Model(DemoModel):

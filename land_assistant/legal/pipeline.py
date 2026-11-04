@@ -4,6 +4,7 @@ import logging
 import time
 import uuid
 from .errors import LegalError
+from .guidance import general_guidance
 from .answer_evidence import public_evidence,validate_claim_sections,salvage_verified_sections
 from .mcp_client import LocalLegalMCP
 from .privacy import has_references, has_unverified_references
@@ -135,8 +136,8 @@ class LegalPipeline:
             if sum(len(m['text'])+sum(map(len,m.get('intake',{}).values())) for m in history)>100000:raise ValueError('История слишком велика. Начните новый чат; переписка останется доступной.')
         except ValueError as exc:return {**base,'status':'invalid_request','answer':str(exc)}
         try:
-            async with asyncio.timeout(120):
-                budget=RequestBudget(deadline=started+120);stage='classify'
+            async with asyncio.timeout(180):
+                budget=RequestBudget(deadline=started+180);stage='classify'
                 plan=await self.model.classify(question,intake,**({'history':history} if history else {}));stage='plan_validate'
                 known=plan.get('known_fields',{}) if isinstance(plan,dict) else {};valid_input(question,known);intake={**known,**intake}
                 trace+=['llm.classify','plan.validate'];tasks=validate_plan(plan);base['tasks']=tasks
@@ -191,7 +192,7 @@ class LegalPipeline:
                                     stage='evidence_validate'
                                     if time.monotonic()>budget.deadline-5:raise SourceError('source_budget_exhausted')
                                     stage='evidence_semantic_check'
-                                    async with asyncio.timeout(min(30,max(.1,budget.deadline-time.monotonic()-1))):
+                                    async with asyncio.timeout(min(getattr(getattr(self.model,'settings',None),'llm_verify_timeout',60),max(.1,budget.deadline-time.monotonic()-1))):
                                         supported=await self.model.verify_evidence(result=result,fragments=fragments,original_question=question,formulation=task['formulation'],intake=intake)
                                     trace.append('evidence.semantic_check')
                                     if not supported:
@@ -245,6 +246,7 @@ class LegalPipeline:
                 if answers:
                     if unanswered:limits.append('Часть запроса не разобрана; см. состояние отдельных задач.')
                     return finish()
+                if not errors and not self.demo:return general_guidance(base,outcomes)
                 if not errors:return {**base,'status':'insufficient_sources','answer':'В доступных нормативных материалах недостаточно оснований для ответа. Дополнительные сведения клиента сами по себе не заменят недостающие нормы.','task_outcomes':outcomes}
         except asyncio.CancelledError:raise
         except Exception as exc:
@@ -254,6 +256,7 @@ class LegalPipeline:
                 if pending['task_id'] not in completed:outcomes.append({'task_id':pending['task_id'],'status':'error','summary':pending['formulation'][:200]+': не обработано из-за ограничения времени или сбоя.'})
             if answers:
                 unanswered=True;limits.append('Остальная часть запроса не обработана из-за ограничения времени или сбоя.');return finish()
+        if not self.demo:return general_guidance(base,outcomes)
         code=errors[-1]['code'] if errors else 'internal_error'
         message='Не удалось подготовить проверенный ответ. Попробуйте повторить запрос позже.'
         if code in ('llm_timeout','pipeline_timeout'):message='Модель не успела подготовить ответ. Попробуйте повторить запрос позже.'

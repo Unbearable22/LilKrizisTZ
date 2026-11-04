@@ -26,7 +26,7 @@ def local_env():
     if path.exists():
         for line in path.read_text().splitlines():
             key,sep,value=line.strip().partition('=')
-            if sep and key in ('LLM_URL','LLM_API_KEY','LLM_MODEL','LLM_CLASSIFY_TIMEOUT','LLM_ANSWER_TIMEOUT','LLM_CLASSIFIER_MODEL','LLM_VERIFIER_MODEL','LLM_VERIFIER_REASONING_EFFORT','LLM_ANSWER_TOKENS'):
+            if sep and key in ('LLM_URL','LLM_API_KEY','LLM_MODEL','LLM_CLASSIFY_TIMEOUT','LLM_ANSWER_TIMEOUT','LLM_CLASSIFIER_MODEL','LLM_VERIFIER_MODEL','LLM_VERIFIER_REASONING_EFFORT','LLM_VERIFY_TIMEOUT','LLM_ANSWER_TOKENS'):
                 os.environ.setdefault(key,value.strip().strip('\"\''))
 
 
@@ -69,7 +69,7 @@ async def evaluate(cases,output):
                 (output/(case['id']+'.json')).write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
                 return result
             started=time.monotonic()
-            async with httpx.AsyncClient(timeout=130) as client:
+            async with httpx.AsyncClient(timeout=190) as client:
                 response=await client.post(f'http://127.0.0.1:{server.server_port}/api/legal-help',json={'question':case['question'],'intake':case['intake'],'chat_id':case['id'],**({'history':case['history']} if 'history' in case else {})})
             public=response.json();record=records.get(case['id'],{})
             code=record.get('internal_result',{}).get('diagnostics',{}).get('code')
@@ -82,14 +82,14 @@ async def evaluate(cases,output):
             bases=[{'title':b['title'],'citation':b['article']} for b in public.get('legal_bases',[])]
             no_refs=not any(has_unverified_references(text,bases) for text in [public.get('answer',''),*public.get('limitations',[])])
             words_ok=not case['answer_keywords'] or bool(re.search(case['answer_keywords'],public.get('answer',''),re.I))
-            result={'id':case['id'],'question':case['question'],'expected_status':case['expected_status'],'status':public.get('status'),'http_status':response.status_code,'answer':public.get('answer'),'limitations':public.get('limitations',[]),'missing_fields':public.get('missing_fields',[]),'seconds':round(time.monotonic()-started,2),'model_calls':record.get('model_calls',0),'status_ok':status_ok,'no_private_metadata':no_metadata,'verified_references_only':no_refs,'legal_bases':public.get('legal_bases',[]),'diagnostic_code':code,'keywords_ok':words_ok,'automated_pass':status_ok and no_metadata and no_refs and words_ok}
+            result={'id':case['id'],'question':case['question'],'expected_status':case['expected_status'],'status':public.get('status'),'response_kind':public.get('response_kind','verified_answer' if public.get('status') in ('answered','partial_answer') else None),'http_status':response.status_code,'answer':public.get('answer'),'limitations':public.get('limitations',[]),'missing_fields':public.get('missing_fields',[]),'seconds':round(time.monotonic()-started,2),'model_calls':record.get('model_calls',0),'status_ok':status_ok,'no_private_metadata':no_metadata,'verified_references_only':no_refs,'legal_bases':public.get('legal_bases',[]),'diagnostic_code':code,'keywords_ok':words_ok,'automated_pass':status_ok and no_metadata and no_refs and words_ok and public.get('response_kind')!='general_guidance'}
             (output/(case['id']+'.private.json')).write_text(json.dumps(record,ensure_ascii=False,indent=2)+'\n')
             (output/(case['id']+'.json')).write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
             print(case['id'],result['status'],'PASS' if result['automated_pass'] else 'REVIEW',result['seconds'],'s',flush=True)
             return result
     try:results=await asyncio.gather(*(one(case) for case in cases))
     finally:server.shutdown();server.server_close()
-    report={'model':settings.llm_model,'verifier_model':settings.llm_verifier_model or settings.llm_model,'verifier_reasoning_effort':settings.llm_verifier_reasoning_effort or 'provider_default','classifier_model':settings.llm_classifier_model or settings.llm_model,'synthetic':True,'cases':len(results),'automated_passed':sum(r['automated_pass'] for r in results),'model_calls':sum(r['model_calls'] for r in results),'manual_review_required':True,'results':results}
+    report={'model':settings.llm_model,'verifier_model':settings.llm_verifier_model or settings.llm_model,'verifier_reasoning_effort':settings.llm_verifier_reasoning_effort or 'provider_default','classifier_model':settings.llm_classifier_model or settings.llm_model,'synthetic':True,'cases':len(results),'guidance_count':sum(r.get('response_kind')=='general_guidance' for r in results),'automated_passed':sum(r['automated_pass'] for r in results),'model_calls':sum(r['model_calls'] for r in results),'manual_review_required':True,'results':results}
     (output/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
     print('TOTAL',report['automated_passed'],'/',len(results),'automated checks; manual review required.',flush=True)
 

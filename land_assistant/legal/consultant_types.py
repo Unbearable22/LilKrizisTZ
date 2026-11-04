@@ -8,7 +8,7 @@ class SourceError(LegalError):
 
 @dataclass
 class RequestBudget:
-    deadline:float=field(default_factory=lambda:time.monotonic()+120)
+    deadline:float=field(default_factory=lambda:time.monotonic()+180)
     roots_left:int=3
     articles_left:int=8
     context_left:int=20000

@@ -54,3 +54,13 @@ class EvaluationTests(unittest.TestCase):
             asyncio.run(evaluate(cases,Path(tmp)))
             report=json.loads((Path(tmp)/'report.json').read_text())
         self.assertEqual(calls,[history]);self.assertEqual(report['automated_passed'],1)
+
+    def test_general_guidance_is_counted_separately_from_verified_answer(self):
+        class Pipeline:
+            def __init__(self,*a,**kw):pass
+            async def run(self,*a,**kw):return {'status':'partial_answer','response_kind':'general_guidance','answer':'Соберите имеющиеся материалы.'}
+        settings=Settings(Path('data'),llm_url='https://model.invalid',llm_model='fixture')
+        cases=[{'id':'guidance','question':'Что делать?','intake':{},'expected_status':['answered','partial_answer'],'answer_keywords':''}]
+        with tempfile.TemporaryDirectory() as tmp,patch('scripts.evaluate_legal.local_env'),patch('scripts.evaluate_legal.Settings.from_env',return_value=settings),patch('scripts.evaluate_legal.LegalPipeline',Pipeline):
+            asyncio.run(evaluate(cases,Path(tmp)));report=json.loads((Path(tmp)/'report.json').read_text())
+        self.assertEqual(report['automated_passed'],0);self.assertEqual(report['guidance_count'],1)

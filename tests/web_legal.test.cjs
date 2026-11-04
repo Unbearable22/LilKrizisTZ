@@ -165,3 +165,13 @@ test('network failure gives understandable message without raw browser error',as
  await client.submit({chatId:'c',requestId:'q',question:'Документы для продажи?'});
  assert.equal(result.status,'error');assert.doesNotMatch(result.answer,/Load failed/);assert.match(result.answer,/соединен|связ/i);
 });
+
+test('general guidance remains labelled and cannot replace an earlier checked answer',()=>{
+ const {publicResult,beginUpdate,finishUpdate,cleanChat}=require('../groundAndLaw/legal-api.js');
+ const guidance={status:'partial_answer',response_kind:'general_guidance',answer:'Общая ориентировка: соберите имеющиеся материалы.',legal_bases:[],evidence:[]};
+ assert.equal(publicResult(guidance).response_kind,'general_guidance');
+ const reply={role:'assistant',text:'Проверенная часть.',legal:{status:'partial_answer',requestId:'q',legal_bases:[{title:'Акт',article:'Правило',explanation:'Условие'}]}};
+ beginUpdate(reply,'q','live');finishUpdate(reply,guidance,'q');assert.equal(reply.text,'Проверенная часть.');assert.equal(reply.legal.updateFailed,true);
+ const fresh={role:'assistant',text:'',legal:{status:'pending',requestId:'new'}};
+ finishUpdate(fresh,guidance,'new');assert.equal(cleanChat({messages:[fresh]}).messages[0].legal.response_kind,'general_guidance');
+});

@@ -565,7 +565,7 @@ function renderLegalMessage(container, chat, message) {
     status.className = 'legal-status';
     const labels = {pending: 'Обработка', answered: 'Готово', partial_answer: 'Предварительный ответ', needs_clarification: 'Нужны исходные сведения',
         insufficient_sources: 'Недостаточно данных', unsupported: 'Функция не подключена', error: 'Ошибка', invalid_request: 'Проверьте ввод', cancelled: 'Ожидание отменено'};
-    status.textContent = (data.updating ? 'Обновление ответа' : (labels[data.status] || '')) + (data.mode === 'demo' ? ' · Учебный режим, без LLM' : '');
+    status.textContent = (data.updating ? 'Обновление ответа' : (data.response_kind === 'general_guidance' ? 'Общая ориентировка' : (labels[data.status] || ''))) + (data.mode === 'demo' ? ' · Учебный режим, без LLM' : '');
     container.appendChild(status);
     if (data.updateFailed) {
         const notice = document.createElement('p'); notice.className = 'legal-update-notice';
@@ -611,8 +611,8 @@ function renderLegalMessage(container, chat, message) {
         });
         container.appendChild(form);
     }
-    if ((data.updateFailed || ['error','cancelled','insufficient_sources'].includes(data.status)) && !data.updating && user && !user.attachments?.length) {
-        container.appendChild(actionButton('Повторить запрос', () => startLegal(chat, user)));
+    if ((data.updateFailed || data.response_kind === 'general_guidance' || ['error','cancelled','insufficient_sources'].includes(data.status)) && !data.updating && user && !user.attachments?.length) {
+        container.appendChild(actionButton(data.response_kind === 'general_guidance' ? 'Повторить проверку' : 'Повторить запрос', () => startLegal(chat, user)));
     }
     if (data.source_checked_at) {
         const checked = document.createElement('p'); checked.className = 'legal-source-date';
