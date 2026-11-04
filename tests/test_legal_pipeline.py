@@ -126,3 +126,14 @@ class LegalPipelineTests(unittest.TestCase):
         self.assertEqual(r['status'],'partial_answer')
         self.assertTrue(r['sources'])
         self.assertIn('Не все связанные нормы прочитаны.',r['limitations'])
+
+    def test_general_answer_can_offer_optional_precision_fields(self):
+        class Optional(DemoModel):
+            async def answer(self,**kw):
+                r=await super().answer(**kw)
+                return {**r,'missing_fields':['rights']}
+        p=LegalPipeline(self.root,Optional(),demo=True)
+        r=asyncio.run(p.run('Как образовать участок?',{}))
+        self.assertEqual(r['status'],'answered')
+        self.assertEqual([f['key'] for f in r['missing_fields']],['rights'])
+        self.assertIn('Более точный ответ',r['answer'])

@@ -1,0 +1,5 @@
+{"cases":[
+{"id":"sale_minimal","question":"я продаю участок, какие документы нужно собрать?","intake":{},"expected_status":["answered","partial_answer"],"answer_keywords":"договор|регистрац"},
+{"id":"labor_vague","question":"Мне не платят зарплату, что делать? Подробностей пока не знаю.","intake":{},"expected_status":["answered","partial_answer"],"answer_keywords":"работодател|зарплат|труд"},
+{"id":"consumer_detailed","question":"Купил телефон в магазине в России пять дней назад. Он перестал включаться, чека не сохранил, оплату видно в банковском приложении. Хочу вернуть деньги. Что делать?","intake":{},"expected_status":["answered","partial_answer"],"answer_keywords":"недостат|продав|потребител"}
+]}

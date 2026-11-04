@@ -9,7 +9,7 @@ async def main():
   async def respond(route):
    nonlocal calls
    calls+=1;q=route.request.post_data_json
-   result={'status':'partial_answer','answer':'Можно уточнить порядок защиты.','missing_fields':[{'key':'event_date','label':'Когда это произошло, если знаете'}],'evidence':[source],'legal_bases':[{'title':source['title'],'article':source['citation'],'explanation':'Определяет порядок выплаты.'}]} if calls==1 else {'status':'error','answer':'Источник недоступен.'}
+   result={'status':os.getenv('TEST_RESPONSE_STATUS','partial_answer'),'answer':'Можно уточнить порядок защиты.','missing_fields':[{'key':'event_date','label':'Когда это произошло, если знаете'}],'evidence':[source],'legal_bases':[{'title':source['title'],'article':source['citation'],'explanation':'Определяет порядок выплаты.'}]} if calls==1 else {'status':'error','answer':'Источник недоступен.'}
    await route.fulfill(json={**result,'chat_id':q['chat_id'],'mode':'demo'})
   await page.route('**/api/legal-help',respond);await page.goto(os.getenv('TEST_WEB_URL','http://127.0.0.1:8082'))
   await page.locator('#startInput').fill('Мне не платят зарплату, дату не помню');await page.locator('#startSendBtn').click()

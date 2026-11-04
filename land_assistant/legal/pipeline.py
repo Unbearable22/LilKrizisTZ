@@ -54,9 +54,10 @@ def validate_answer(result,fragments,scope='general'):
     if any(check(b['explanation']) for b in bases):raise LegalError('visible_references')
     if check(result['answer']) or any(check(limit) for limit in limits):raise LegalError('visible_references')
 
+    questions=result.get('missing_fields',[])
+    if not isinstance(questions,list) or len(questions)>3 or any(not isinstance(k,str) or k not in FIELD_LABELS for k in questions) or len(set(questions))!=len(questions):raise LegalError('invalid_missing_fields')
+
     if result.get('status')=='partial_answer':
-        questions=result.get('missing_fields',[])
-        if not isinstance(questions,list) or len(questions)>3 or any(not isinstance(k,str) or k not in FIELD_LABELS for k in questions) or len(set(questions))!=len(questions):raise LegalError('invalid_missing_fields')
         scenarios=result.get('scenarios')
         if not isinstance(scenarios,list) or not 1<=len(scenarios)<=3:raise LegalError('invalid_scenarios')
         for branch in scenarios:
@@ -219,9 +220,11 @@ class LegalPipeline:
                         if is_partial:
                             partial=True;text='Предварительный разбор: факты и документы не проверялись.\n\n'+text+'\n\nВозможные варианты:'
                             for branch in result['scenarios']:text+='\n• Если '+branch['condition'].strip()+', то '+branch['outcome'].strip();citations.extend(branch['citations'])
-                            for key in result.get('missing_fields',[]):
-                                if key not in ('situation','goal') and key in allowed_fields(task['legal_topic']) and not intake.get(key,'').strip():questions[key]={'key':key,'label':FIELD_LABELS[key]}
-                        if is_partial and questions:text+='\n\nБолее точный ответ можно получить, если сообщить: '+', '.join(q['label'].lower() for q in questions.values())+'. Это необязательно для использования общего разбора.'
+                        task_questions=[]
+                        for key in result.get('missing_fields',[]):
+                            if key not in ('situation','goal') and key in allowed_fields(task['legal_topic']) and not intake.get(key,'').strip():
+                                questions[key]={'key':key,'label':FIELD_LABELS[key]};task_questions.append(FIELD_LABELS[key].lower())
+                        if task_questions:text+='\n\nБолее точный ответ можно получить, если сообщить: '+', '.join(task_questions)+'. Это необязательно для использования общего разбора.'
                         available={f['id']:f for f in fragments}
                         for b in result.get('legal_bases',[]):
                             f=available[b['fragment_id']];title=f['title'].split(' — часть')[0];title=(f.get('act_designation','')+' «'+title+'»') if f.get('act_designation') else title

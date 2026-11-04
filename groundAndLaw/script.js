@@ -578,10 +578,10 @@ function renderLegalMessage(container, chat, message) {
             await ChatDB.saveChat(chat); if (state.activeChatId === chat.id) renderMessages(chat);
         }));
     }
-    if (['needs_clarification','partial_answer'].includes(data.status) && user && data.missing_fields?.length) {
+    if (['needs_clarification','partial_answer','answered'].includes(data.status) && user && data.missing_fields?.length) {
         const form = document.createElement('form'); form.className = 'legal-intake';
         const intro = document.createElement('p');
-        const optional = data.status === 'partial_answer';
+        const optional = data.status !== 'needs_clarification';
         intro.textContent = optional ? 'Если знаете эти сведения, укажите их для уточнения ответа. Можно заполнить только часть полей или оставить предварительный ответ.' : 'Опишите, с каким вопросом нужна помощь. Достаточно ситуации или желаемого результата.';
         form.appendChild(intro);
         for (const field of data.missing_fields) {
