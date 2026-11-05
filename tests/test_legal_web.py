@@ -101,3 +101,21 @@ class WebTests(unittest.TestCase):
             self.assertGreaterEqual(status,400)
             result=json.loads(data)
             self.assertTrue({'sources','citations','trace','tasks','error_code'}.isdisjoint(result))
+class NetworkBindingTests(unittest.TestCase):
+    def test_lan_host_must_match_connection_destination(self):
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+        handler=make_web_handler(SimpleNamespace(demo=False),Path('.'))
+        connection=MagicMock();connection.getsockname.return_value=('192.168.1.20',8080)
+        request=SimpleNamespace(headers={'Host':'192.168.1.20:8080'},server=SimpleNamespace(server_port=8080),connection=connection)
+        self.assertTrue(handler.allowed_host(request))
+        for value in ['192.168.1.99:8080','evil.example:8080','192.168.1.20:8081']:
+            request.headers['Host']=value;self.assertFalse(handler.allowed_host(request))
+    def test_web_listens_on_all_interfaces_for_lan_testing(self):
+        from unittest.mock import patch,MagicMock
+        from land_assistant.legal.web import serve_web
+        pipeline=MagicMock(demo=False)
+        with patch('land_assistant.legal.web.ThreadingHTTPServer') as server,patch('builtins.print'):
+            serve_web(pipeline,Path('.'),8080)
+        self.assertEqual(server.call_args.args[0],('0.0.0.0',8080))
+        server.return_value.server_close.assert_called_once()

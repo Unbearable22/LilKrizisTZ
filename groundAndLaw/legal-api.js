@@ -51,8 +51,9 @@
         for(const key of ['status','answer','mode','chat_id','requestId']) {
             if(typeof value[key]==='string')result[key]=value[key];
         }
+        if(typeof value.snapshot_as_of==='string' && /^\d{4}-\d{2}-\d{2}$/.test(value.snapshot_as_of) && Number.isFinite(Date.parse(value.snapshot_as_of)))result.snapshot_as_of=value.snapshot_as_of;
         if(value.response_kind==='general_guidance')result.response_kind='general_guidance';
-        result.evidence=(Array.isArray(value.evidence)?value.evidence:[]).filter(safeEvidence).slice(0,24).map(({title,publisher,source_kind,url,citation,revision,checked_at,claim_ids},i)=>({number:i+1,title,publisher,source_kind,url,citation,revision,checked_at,claim_ids:(Array.isArray(claim_ids)?claim_ids:[]).filter(v=>typeof v==='string' && /^[a-zA-Z0-9_-]{1,30}\/(?:answer|scenario:[0-2]|basis:[0-5])$/.test(v))}));
+        result.evidence=(Array.isArray(value.evidence)?value.evidence:[]).filter(safeEvidence).slice(0,24).map(({title,publisher,source_kind,url,citation,revision,checked_at,snapshot_as_of,claim_ids},i)=>({number:i+1,title,publisher,source_kind,url,citation,revision,checked_at,...(typeof snapshot_as_of==='string' && /^\d{4}-\d{2}-\d{2}$/.test(snapshot_as_of) && Number.isFinite(Date.parse(snapshot_as_of))?{snapshot_as_of}:{}),claim_ids:(Array.isArray(claim_ids)?claim_ids:[]).filter(v=>typeof v==='string' && /^[a-zA-Z0-9_-]{1,30}\/(?:answer|scenario:[0-2]|basis:[0-5])$/.test(v))}));
         result.missing_fields=(Array.isArray(value.missing_fields)?value.missing_fields:[])
             .filter(item=>item && typeof item.key==='string' && typeof item.label==='string' && !hasReferences(item.key) && !hasReferences(item.label))
             .map(({key,label})=>({key,label}));

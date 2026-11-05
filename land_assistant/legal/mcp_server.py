@@ -24,7 +24,7 @@ def create_server(root,demo=False,cache_root=None,budget=None):
 
     @server.tool()
     def read_legal_fragment(fragment_id:str) -> dict:
-        """Read a known current fragment by ID, never by a caller-supplied file path."""
+        """Read a registered normative snapshot by ID, never by a caller-supplied file path."""
         return library.read(fragment_id)
 
     return server

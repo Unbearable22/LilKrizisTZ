@@ -175,3 +175,14 @@ test('general guidance remains labelled and cannot replace an earlier checked an
  const fresh={role:'assistant',text:'',legal:{status:'pending',requestId:'new'}};
  finishUpdate(fresh,guidance,'new');assert.equal(cleanChat({messages:[fresh]}).messages[0].legal.response_kind,'general_guidance');
 });
+
+test('snapshot date survives public boundary, storage and failed update',()=>{
+ const {publicResult,cleanChat,beginUpdate,finishUpdate}=require('../groundAndLaw/legal-api.js');
+ const source={title:'Закон',publisher:'КонсультантПлюс',source_kind:'normative_act',url:'https://www.consultant.ru/document/cons_doc_LAW_33773/',citation:'Статья 11.10',revision:'Редакция',checked_at:'2026-10-22',snapshot_as_of:'2026-10-22'};
+ const value={status:'partial_answer',answer:'Материалы проверены по состоянию на 22.10.2026.',snapshot_as_of:'2026-10-22',source_checked_at:'2026-10-22',evidence:[source]};
+ assert.equal(publicResult(value).evidence[0].snapshot_as_of,'2026-10-22');
+ assert.equal(publicResult(value).snapshot_as_of,'2026-10-22');
+ const reply={role:'assistant',text:value.answer,legal:{...value,requestId:'q'}};
+ beginUpdate(reply,'q','live');finishUpdate(reply,{status:'error',answer:'Не удалось.'},'q');
+ assert.equal(cleanChat({messages:[reply]}).messages[0].legal.snapshot_as_of,'2026-10-22');
+});

@@ -41,7 +41,7 @@ def public_evidence(fragments):
         refs=[v for v in f.get('_claim_refs',[]) if isinstance(v,str) and re.fullmatch(r'[a-zA-Z0-9_-]{1,30}/(?:answer|scenario:[0-2]|basis:[0-5])',v)]
         if key in seen:
             seen[key]['claim_ids']=sorted(set(seen[key]['claim_ids']+refs));continue
-        result.append({'number':len(result)+1,'title':f.get('title',''),'publisher':policy.publisher,'source_kind':f.get('source_kind',policy.source_kind),'url':f['source_url'],'citation':f.get('citation',''),'revision':f.get('version',''),'checked_at':f['last_checked_at'],'claim_ids':refs})
+        result.append({'number':len(result)+1,'title':f.get('title',''),'publisher':policy.publisher,'source_kind':f.get('source_kind',policy.source_kind),'url':f['source_url'],'citation':f.get('citation',''),'revision':f.get('version',''),'checked_at':f['last_checked_at'],**({'snapshot_as_of':f['snapshot_as_of']} if f.get('snapshot_as_of') else {}),'claim_ids':refs})
         seen[key]=result[-1]
     return result
 

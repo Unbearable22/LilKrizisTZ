@@ -47,9 +47,13 @@ class KnowledgeTests(unittest.TestCase):
     def test_demo_sources_never_become_live_law(self):
         self.assertEqual(Knowledge(self.root,demo=False).search('участок'),[])
 
-    def test_expired_material_is_not_used(self):
+    def test_expired_material_is_available_as_dated_snapshot(self):
         p=self.root/'laws/manifest.json';data=json.loads(p.read_text());data['documents'][0]['valid_until']='2000-01-01';p.write_text(json.dumps(data))
-        self.assertEqual(Knowledge(self.root,demo=True).search('участок'),[])
+        hits=Knowledge(self.root,demo=True).search('участок')
+        self.assertTrue(hits)
+        fragment=Knowledge(self.root,demo=True).read(hits[0]['id'])
+        self.assertEqual(fragment['snapshot_as_of'],'2000-01-01')
+        self.assertEqual(fragment['last_checked_at'],'2000-01-01')
 
     def test_file_change_invalidates_old_fragment_id(self):
         k=Knowledge(self.root,demo=True);fid=k.search('образование')[0]['id']
@@ -99,3 +103,25 @@ class KnowledgeTests(unittest.TestCase):
         found=Knowledge(self.root,demo=True).search('О правах членов')
         self.assertTrue(found)
         self.assertEqual(found[0]['citation'],'Статья 1. Права члена товарищества')
+
+    def test_expired_live_snapshot_keeps_date_through_real_mcp(self):
+        p=self.root/'laws/manifest.json';data=json.loads(p.read_text());doc=data['documents'][0]
+        doc.update(demo=False,verified_by='Проверено',valid_until='2026-10-22',retrieved_at='2026-10-22',source_url='https://www.consultant.ru/document/cons_doc_LAW_33773/')
+        p.write_text(json.dumps(data))
+        result=asyncio.run(LocalLegalMCP(self.root).context('образование участка'))
+        self.assertTrue(result['fragments'])
+        self.assertEqual(result['fragments'][0]['snapshot_as_of'],'2026-10-22')
+        self.assertIn('22.10.2026',' '.join(result['limitations']))
+        self.assertIn('snapshot_as_of',result['prompt'])
+
+    def test_future_effective_law_is_still_excluded(self):
+        p=self.root/'laws/manifest.json';data=json.loads(p.read_text());data['documents'][0].update(valid_until='2026-10-22',effective_from='2099-01-01')
+        p.write_text(json.dumps(data))
+        self.assertEqual(Knowledge(self.root,demo=True).search('участок'),[])
+
+    def test_expired_changed_or_unverified_snapshot_is_not_silently_accepted(self):
+        p=self.root/'laws/manifest.json';data=json.loads(p.read_text());data['documents'][0].update(valid_until='2026-10-22',sha256='0'*64)
+        p.write_text(json.dumps(data))
+        with self.assertRaises(ValueError):Knowledge(self.root,demo=True).search('участок')
+        data['documents'][0].pop('sha256');data['documents'][0]['verified_by']='';p.write_text(json.dumps(data))
+        self.assertEqual(Knowledge(self.root,demo=True).search('участок'),[])

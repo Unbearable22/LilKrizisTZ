@@ -616,7 +616,8 @@ function renderLegalMessage(container, chat, message) {
     }
     if (data.source_checked_at) {
         const checked = document.createElement('p'); checked.className = 'legal-source-date';
-        checked.textContent = 'Источники проверены: ' + new Date(data.source_checked_at).toLocaleString('ru-RU', {timeZone:'Europe/Moscow'});
+        const checkedDate=new Date(data.source_checked_at);
+        checked.textContent = 'Материалы проверены: ' + (/^\d{4}-\d{2}-\d{2}$/.test(data.source_checked_at)?checkedDate.toLocaleDateString('ru-RU',{timeZone:'Europe/Moscow'}):checkedDate.toLocaleString('ru-RU',{timeZone:'Europe/Moscow'}));
         container.appendChild(checked);
     }
     const failedTasks = (data.task_outcomes || []).filter(task => ['error','insufficient_sources'].includes(task.status));
@@ -643,6 +644,7 @@ function renderLegalMessage(container, chat, message) {
             link.textContent=`[${source.number}] ${source.title} — ${source.citation}`; paragraph.appendChild(link);
             const info=document.createElement('small');
             info.textContent=`${types[source.source_kind] || 'Документ'} · ${source.publisher} · ${source.revision} · проверено ${new Date(source.checked_at).toLocaleDateString('ru-RU',{timeZone:'Europe/Moscow'})}`;
+            if(source.snapshot_as_of)info.textContent+=' · Сохранённая копия; последующие изменения не проверены';
             paragraph.appendChild(info); section.appendChild(paragraph);
         }
         container.appendChild(section);

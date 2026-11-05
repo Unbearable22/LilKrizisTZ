@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import timedelta
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from .snapshots import snapshot_notice,SNAPSHOT_POLICY
 
 
 class LocalLegalMCP:
@@ -39,8 +40,12 @@ class LocalLegalMCP:
                     if size+len(fragment['text'])>16000:continue
                     fragments.append(fragment);size+=len(fragment['text'])
                     trace.append('mcp.tools.read')
+                if any(f.get('snapshot_as_of') for f in fragments):master+='\n'+SNAPSHOT_POLICY
                 if not master:raise ValueError('MCP вернул пустой мастер-промпт.')
                 reduced=len(fragments)<len(matches)
                 limitations=['Объём учтённых материалов ограничен; ответ не является исчерпывающим анализом ситуации.'] if reduced else []
                 if any(f.get('partial') for f in fragments):limitations.append('Учтена часть доступных материалов; отдельные условия могут требовать дополнительного разбора.')
-                return {'prompt':master,'fragments':fragments,'trace':trace,'reads_used':min(len(matches),max(0,min(6,max_reads))),'context_reduced':reduced,'limitations':limitations}
+                dates=sorted({f['snapshot_as_of'] for f in fragments if f.get('snapshot_as_of')})
+                limitations.extend(snapshot_notice(d) for d in dates)
+                checks=[f['last_checked_at'] for f in fragments if f.get('last_checked_at')]
+                return {'source_checked_at':min(checks) if checks else None,'prompt':master,'fragments':fragments,'trace':trace,'reads_used':min(len(matches),max(0,min(6,max_reads))),'context_reduced':reduced,'limitations':limitations}

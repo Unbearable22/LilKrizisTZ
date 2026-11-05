@@ -3,7 +3,7 @@ import json
 import math
 from collections import Counter
 import re
-from datetime import datetime
+from datetime import date,datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
@@ -60,7 +60,12 @@ class Knowledge:
             # Validate paths even for nonactive records: configuration must not hide unsafe references.
             text=self._text('laws',doc['path'],'.md')
             if not self.demo and doc.get('demo',True):continue
-            if not doc.get('verified_by') or not doc.get('valid_until') or doc['valid_until']<today:continue
+            if not doc.get('verified_by') or not doc.get('valid_until'):continue
+            expires=date.fromisoformat(doc['valid_until']).isoformat()
+            stale=expires<today
+            verified=doc.get('verified_at') or doc.get('retrieved_at') or (expires if stale else None)
+            verified=datetime.fromisoformat(verified).date().isoformat() if verified else None
+            if verified and verified>today:raise ValueError('Дата проверки источника находится в будущем.')
             if doc.get('effective_from',today)>today:continue
             if not all(isinstance(doc.get(k),str) and doc[k] for k in ('title','version','source_url')):raise ValueError('У источника отсутствуют реквизиты.')
             if urlsplit(doc['source_url']).scheme!='https':raise ValueError('Источник требует HTTPS-ссылку.')
@@ -84,7 +89,9 @@ class Knowledge:
                         current=(current+'\n\n'+piece).strip()
                 if current:pieces.append(current)
                 for piece in pieces:
-                    fragments.append({'id':f'{did}:{digest[:16]}:{index}','document_id':did,'act_designation':act_designation,'title':doc['title'],'version':doc['version'],'citation':heading,'source_url':doc['source_url'],'sha256':digest,'demo':bool(doc.get('demo',True)),'text':piece,'partial':len(pieces)>1})
+                    provenance={'last_checked_at':verified} if verified else {}
+                    if stale:provenance['snapshot_as_of']=verified
+                    fragments.append({**provenance,'id':f'{did}:{digest[:16]}:{index}','document_id':did,'act_designation':act_designation,'title':doc['title'],'version':doc['version'],'citation':heading,'source_url':doc['source_url'],'sha256':digest,'demo':bool(doc.get('demo',True)),'text':piece,'partial':len(pieces)>1})
                     index+=1
         return fragments
 

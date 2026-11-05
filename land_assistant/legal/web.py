@@ -1,4 +1,4 @@
-"""Loopback-only prototype host; not a public multi-tenant deployment."""
+"""Prototype host with LAN access for partner testing."""
 import asyncio
 import json
 import mimetypes
@@ -57,6 +57,9 @@ def make_web_handler(pipeline,static_root):
         def allowed_host(self):
             host=self.headers.get('Host','')
             expected={f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}'}
+            # Accept the actual local destination IP for LAN clients, without
+            # allowing arbitrary Host names or unrelated private IP addresses.
+            expected.add(f'{self.connection.getsockname()[0]}:{self.server.server_port}')
             codespace=os.getenv('CODESPACE_NAME','')
             if codespace:expected.add(f'{codespace}-{self.server.server_port}.app.github.dev')
             return host in expected
@@ -127,9 +130,10 @@ def make_web_handler(pipeline,static_root):
 
 
 def serve_web(pipeline,static_root,port=8080):
-    server=ThreadingHTTPServer(('127.0.0.1',port),make_web_handler(pipeline,static_root))
+    server=ThreadingHTTPServer(('0.0.0.0',port),make_web_handler(pipeline,static_root))
     server.daemon_threads=True
     print(f'GROUNDandLAW: http://127.0.0.1:{server.server_port} · режим {"DEMO" if pipeline.demo else "LIVE"}',flush=True)
+    print(f'Доступ из локальной сети: http://<IP компьютера>:{server.server_port} (прослушивание 0.0.0.0)',flush=True)
     try:server.serve_forever()
     except KeyboardInterrupt:pass
     finally:server.server_close()

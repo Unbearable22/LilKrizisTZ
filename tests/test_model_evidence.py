@@ -91,3 +91,12 @@ class ModelEvidenceTests(unittest.TestCase):
     result=asyncio.run(method(draft=draft,original_question='1',formulation='Задача',intake={},prompt='Правила',fragments=[{'id':fid,'text':fid}]))
    payload=json.loads(call.call_args.args[0][1]['content']);self.assertEqual(payload['draft']['citations'],['1']);self.assertEqual(payload['draft']['claims'][0]['anchors'][0]['quote'],fid);self.assertEqual(result['citations'],[fid])
   self.assertEqual(draft['citations'],[fid])
+ def test_verifier_receives_snapshot_date_instead_of_assuming_current_edition(self):
+  model=LiveModel(Settings(Path('data'),llm_url='https://fixture.invalid',llm_model='fixture'))
+  draft={'answer':'Общий порядок.','citations':['f'],'status':'answered'}
+  with patch.object(model,'_json',AsyncMock(return_value={'supported':True})) as call:
+   asyncio.run(model.verify_evidence(result=draft,fragments=[{'id':'f','text':'Сохранённое нормативное положение.','snapshot_as_of':'2026-10-22','last_checked_at':'2026-10-22'}]))
+  import json
+  payload=json.loads(call.call_args.args[0][-1]['content'])
+  self.assertEqual(payload['fragments'][0]['snapshot_as_of'],'2026-10-22')
+  self.assertIn('локальные снимки',call.call_args.args[0][0]['content'])

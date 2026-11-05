@@ -5,6 +5,7 @@ import time
 import uuid
 from .errors import LegalError
 from .guidance import general_guidance
+from .snapshots import snapshot_notice
 from .answer_evidence import public_evidence,validate_claim_sections,salvage_verified_sections
 from .mcp_client import LocalLegalMCP
 from .privacy import has_references, has_unverified_references
@@ -85,6 +86,10 @@ class LegalPipeline:
         if budget.articles_left<=0:raise SourceError('source_budget_exhausted')
         read_cap=min(6,budget.articles_left)
         context=await LocalLegalMCP(self.root,demo=self.demo).context(task['formulation'],max_reads=read_cap)
+        # Final snapshot notices belong to cited sources, including when the
+        # budget later removes a fragment from this initial MCP context.
+        notices={snapshot_notice(f['snapshot_as_of']) for f in context['fragments'] if f.get('snapshot_as_of')}
+        context['limitations']=[v for v in context.get('limitations',[]) if v not in notices]
         budget.articles_left-=min(read_cap,context.get('reads_used',len(context['fragments'])))
         chosen=[];task_remaining=min(6000,budget.context_left) if re.search(r'прод|купл',task['formulation'],re.I) else budget.context_left
         for fragment in context['fragments'][:read_cap]:
@@ -121,7 +126,14 @@ class LegalPipeline:
         base={'status':'error','question':question if isinstance(question,str) else '', 'tasks':[], 'missing_fields':[], 'answer':'','sources':[], 'mode':'demo' if self.demo else 'live','trace':trace,'limitations':[], 'diagnostics':{'run_id':run_id}}
         answers=[];bases=[];sources={};limits=[];questions={};outcomes=[];checked=[];partial=False;unanswered=False;errors=[]
         def finish():
-            return {**base,'status':'partial_answer' if partial or unanswered else 'answered','answer':'\n\n'.join(answers),'sources':list(sources.values()),'evidence':public_evidence(sources.values()),'legal_bases':bases,'missing_fields':list(questions.values())[:3],'limitations':list(dict.fromkeys(limits)),'task_outcomes':outcomes,'source_checked_at':min(checked) if checked else None}
+            result={**base,'status':'partial_answer' if partial or unanswered else 'answered','answer':'\n\n'.join(answers),'sources':list(sources.values()),'evidence':public_evidence(sources.values()),'legal_bases':bases,'missing_fields':list(questions.values())[:3],'limitations':list(dict.fromkeys(limits)),'task_outcomes':outcomes,'source_checked_at':min(checked) if checked else None}
+            dates=sorted({f['snapshot_as_of'] for f in sources.values() if f.get('snapshot_as_of')})
+            if dates:
+                notice=snapshot_notice(dates[0])
+                result.update(status='partial_answer',snapshot_as_of=dates[0],answer=notice+'\n\n'+result['answer'])
+                result['source_checked_at']=min([*checked,*dates])
+                result['limitations']=list(dict.fromkeys([*result['limitations'],notice]))
+            return result
         def diagnostic(exc):
             code=getattr(exc,'code','pipeline_timeout' if isinstance(exc,TimeoutError) else 'mcp_failure' if stage=='mcp_context' else 'invalid_plan' if stage in ('classify','plan_validate') else 'internal_error')
             data={'run_id':run_id,'stage':stage,'code':code,'elapsed_seconds':round(time.monotonic()-started,2)}
@@ -238,8 +250,13 @@ class LegalPipeline:
                             refs.extend(task['task_id']+'/basis:'+str(i) for i,b in enumerate(result.get('legal_bases',[])) if c==b['fragment_id'])
                             previous=sources.get(c,{}).get('_claim_refs',[])
                             sources[c]={**{k:v for k,v in available[c].items() if k!='text'},'_claim_refs':sorted(set(previous+refs))}
-                        answers.append(text);limits.extend(context.get('limitations',[]));limits.extend(result.get('limitations',[]));outcomes.append({'task_id':task['task_id'],'status':'partial_answer' if is_partial or context.get('coverage_gaps') else 'answered','summary':task['formulation'][:200]})
-                        if context.get('source_checked_at'):checked.append(context['source_checked_at'])
+                        # Reading an old snapshot does not mean the answer used it.
+                        # finish() labels snapshots from committed sources only.
+                        snapshot_notices={snapshot_notice(f['snapshot_as_of']) for f in fragments if f.get('snapshot_as_of')}
+                        answers.append(text);limits.extend(v for v in context.get('limitations',[]) if v not in snapshot_notices);limits.extend(v for v in result.get('limitations',[]) if v not in snapshot_notices);outcomes.append({'task_id':task['task_id'],'status':'partial_answer' if is_partial or context.get('coverage_gaps') else 'answered','summary':task['formulation'][:200]})
+                        used_checks=[available[c]['last_checked_at'] for c in set(citations) if available[c].get('last_checked_at')]
+                        checked.extend(used_checks)
+                        if not used_checks and context.get('source_checked_at') and not snapshot_notices:checked.append(context['source_checked_at'])
                     except asyncio.CancelledError:raise
                     except Exception as exc:
                         data=diagnostic(exc);errors.append(data);base['diagnostics']=data;unanswered=True;outcomes.append({'task_id':task['task_id'],'status':'error','summary':task['formulation'][:200]+': доступ к материалам или проверка ответа завершились ошибкой.'})

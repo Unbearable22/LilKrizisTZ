@@ -137,3 +137,53 @@ class LegalPipelineTests(unittest.TestCase):
         self.assertEqual(r['status'],'answered')
         self.assertEqual([f['key'] for f in r['missing_fields']],['rights'])
         self.assertIn('Более точный ответ',r['answer'])
+
+    def test_used_snapshot_is_date_labelled_and_never_called_current(self):
+        original=self.pipeline.context_for_task
+        async def dated(task,**kwargs):
+            context=await original(task,**kwargs)
+            context['fragments']=[{**f,'snapshot_as_of':'2026-10-22','last_checked_at':'2026-10-22'} for f in context['fragments']]
+            return context
+        self.pipeline.context_for_task=dated
+        r=self.run_query('Как образовать участок?',{})
+        self.assertEqual(r['status'],'partial_answer');self.assertEqual(r['snapshot_as_of'],'2026-10-22')
+        self.assertIn('22.10.2026',r['answer']);self.assertIn('не проверены',r['answer'])
+
+    def test_uncited_snapshot_does_not_relabel_a_fresh_answer(self):
+        class FirstOnly(DemoModel):
+            async def answer(self,**kwargs):
+                result=await super().answer(**kwargs)
+                result['citations']=[kwargs['fragments'][0]['id']]
+                return result
+        self.pipeline.model=FirstOnly()
+        original=self.pipeline.context_for_task
+        async def mixed(task,**kwargs):
+            context=await original(task,**kwargs)
+            from land_assistant.legal.snapshots import snapshot_notice
+            f={**context['fragments'][0],'last_checked_at':'2026-11-05'}
+            context['fragments']=[f,{**f,'id':'unused','snapshot_as_of':'2026-10-22','last_checked_at':'2026-10-22'}]
+            context['source_checked_at']='2026-10-22'
+            context['limitations'].append(snapshot_notice('2026-10-22'))
+            return context
+        self.pipeline.context_for_task=mixed
+        r=self.run_query('Как образовать участок?',{})
+        self.assertEqual(r['status'],'answered');self.assertNotIn('snapshot_as_of',r)
+        self.assertEqual(r['source_checked_at'],'2026-11-05')
+        self.assertFalse(any('22.10.2026' in v for v in r['limitations']))
+
+    def test_budget_pruned_snapshot_does_not_leave_date_notice(self):
+        from unittest.mock import AsyncMock,patch
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        from land_assistant.legal.consultant_types import RequestBudget
+        from land_assistant.legal.snapshots import snapshot_notice
+        fresh={'id':'fresh','text':'fresh','last_checked_at':'2026-11-05'}
+        old={'id':'old','text':'x'*10000,'snapshot_as_of':'2026-10-22','last_checked_at':'2026-10-22'}
+        context={'prompt':'test','fragments':[fresh,old],'limitations':[snapshot_notice('2026-10-22')]}
+        async def run():
+            budget=RequestBudget();budget.context_left=10
+            with patch('land_assistant.legal.pipeline.LocalLegalMCP.context',new=AsyncMock(return_value=context)):
+                return await self.pipeline.context_for_task({'function_id':'legal_help','formulation':'Справка'},budget=budget,as_of_date=datetime.now(ZoneInfo('Europe/Moscow')).date().isoformat())
+        result=asyncio.run(run())
+        self.assertEqual(result['fragments'],[fresh])
+        self.assertFalse(any('22.10.2026' in v for v in result['limitations']))
