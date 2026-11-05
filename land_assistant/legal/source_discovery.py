@@ -10,6 +10,7 @@ from .source_index import SourceIndex
 from .source_documents import VerifiedDocument
 from .public_sources import official_fragments
 from .web_discovery import discover_roots
+from .task_catalog import is_land_acquisition,LAND_ACQUISITION_ARTICLES
 
 class VerifiedSourceLibrary:
     def __init__(self,root,cache_root):
@@ -27,6 +28,8 @@ class VerifiedSourceLibrary:
         self.errors=[];self.coverage_gaps=[]
         allowed_roots=[r['url'] for r in self.library.roots if r.get('enabled') and legal_topic in r['topics']]
         hits=[] if refresh else [f for f in self.index.search(query,8,as_of_date) if f.get('legal_topic')==legal_topic or any(f['source_url'].startswith(url) for url in allowed_roots)]
+        acquisition=legal_topic=='land' and is_land_acquisition(query)
+        if acquisition:hits=[f for f in hits if '/cons_doc_LAW_33773/' in f.get('source_url','') and any(re.match(r'Статья\s+'+re.escape(n)+r'(?!\d|\.\d)',f.get('citation','')) for n in LAND_ACQUISITION_ARTICLES)]
         if 'паспорт' in query and re.search(r'утрат|хищ',query,re.I):
             citizenship=[r['url'] for r in self.library.roots if r['id']=='citizenship']
             hits=[f for f in hits if not any(f['source_url'].startswith(url) for url in citizenship) or re.match(r'Статья\s+9(?!\d|\.\d)',f.get('citation',''))]
@@ -40,9 +43,9 @@ class VerifiedSourceLibrary:
             return [{k:v for k,v in f.items() if k!='text'} for f in selected]
         if budget.discovery_left<=0:raise SourceError('source_budget_exhausted')
         # Catalog lookup and native web lookup each consume one slot, not two.
-        if not refresh:budget.discovery_left-=1
+        if not refresh or acquisition:budget.discovery_left-=1
         found=[]
-        if refresh:
+        if refresh and not acquisition:
             try:found=await self.search_web(query,legal_topic,as_of_date,budget)
             except SourceError as exc:
                 self.errors.append(exc.code)
@@ -50,7 +53,7 @@ class VerifiedSourceLibrary:
         # Reserve one root read for genuinely new documents when the catalog fails.
         reserved=1 if budget.roots_left>1 else 0
         sale_documents=legal_topic=='civil' and bool(re.search(r'продаж.*недвижим',query,re.I))
-        reserved_documents=3 if not sale_documents and not refresh and budget.discovery_left>0 and budget.documents_left>=4 else 0
+        reserved_documents=3 if not sale_documents and not acquisition and not refresh and budget.discovery_left>0 and budget.documents_left>=4 else 0
         budget.roots_left-=reserved
         budget.documents_left-=reserved_documents
         try:
@@ -62,7 +65,7 @@ class VerifiedSourceLibrary:
             budget.roots_left+=reserved
             budget.documents_left+=reserved_documents
         self.errors.extend(self.library.errors)
-        if not found and not refresh and not budget.rate_limited and 'source_access_restricted' not in self.errors:
+        if not found and (not refresh or acquisition) and not budget.rate_limited and 'source_access_restricted' not in self.errors:
             try:
                 found=await self.search_web(query,legal_topic,as_of_date,budget)
                 self.errors.extend(self.library.errors)
@@ -81,6 +84,9 @@ class VerifiedSourceLibrary:
         return found
     @staticmethod
     def covered(query,topic,fragments):
+        if topic=='land' and is_land_acquisition(query):
+            numbers={m.group(1) for f in fragments if '/cons_doc_LAW_33773/' in f.get('source_url','') and (m:=re.match(r'Статья\s+(\d+(?:\.\d+)?)',f.get('citation','')))}
+            return set(LAND_ACQUISITION_ARTICLES)<=numbers
         if topic=='civil' and re.search(r'продаж.*недвижим',query,re.I):
             return any('/cons_doc_LAW_182661/' in f.get('source_url','') and re.match(r'Статья\s+18(?!\d|\.\d)',f.get('citation','')) for f in fragments) and any('/cons_doc_LAW_9027/' in f.get('source_url','') and re.match(r'Статья\s+55[01](?!\d|\.\d)',f.get('citation','')) for f in fragments)
         if topic=='family' and 'алиментов' in query and 'несовершеннолетних детей' in query:

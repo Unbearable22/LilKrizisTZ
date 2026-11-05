@@ -9,6 +9,7 @@ from .consultant_types import DocumentPage,SourceError
 from .consultant_cache import ConsultantCache
 from .consultant_parser import parse_document
 from .knowledge import terms
+from .task_catalog import is_land_acquisition,LAND_ACQUISITION_ARTICLES
 
 class ConsultantLibrary:
     def __init__(self,registry,cache_root,http=None,now=None):
@@ -37,6 +38,8 @@ class ConsultantLibrary:
         if min(budget.roots_left,budget.articles_left,budget.context_left)<=0:raise SourceError('source_budget_exhausted')
         roots=[r for r in self.roots if r.get('enabled') and legal_topic in r['topics'] and (r['id']!='enforcement' or re.search(r'исполнительн|пристав',query,re.I))]
         if 'паспорт' in query and any(r['id']=='citizenship' for r in roots):roots=[r for r in roots if r['id']=='citizenship']
+        acquisition=legal_topic=='land' and is_land_acquisition(query)
+        if acquisition:roots=[r for r in roots if r['url']=='https://www.consultant.ru/document/cons_doc_LAW_33773/']
         if not roots:raise SourceError('search_no_candidates')
         if legal_topic=='civil' and re.search(r'продаж.*недвижим',query,re.I):roots=sorted([r for r in roots if r['id'] in ('civil2','registration')],key=lambda r:0 if r['id']=='registration' else 1)
         if legal_topic=='tax' and re.search(r'продаж.*недвижим',query,re.I):roots=[r for r in roots if r['id']=='tax2']
@@ -52,6 +55,10 @@ class ConsultantLibrary:
                 for item in parsed['toc']:
                     if passport_loss and root['id']=='citizenship' and not re.match(r'Статья\s+9(?!\d|\.\d)',item['title']):continue
                     title_words=terms(item['title']);score=sum(math.log(1+(len(parsed['toc'])+1)/(frequency[word]+1)) for word in words & title_words)/(1+.02*len(title_words))
+                    if acquisition:
+                        number=re.search(r'Статья\s+(\d+(?:\.\d+)?)',item['title'])
+                        if not number or number.group(1) not in LAND_ACQUISITION_ARTICLES:continue
+                        score+=1000-10*LAND_ACQUISITION_ARTICLES.index(number.group(1))
                     if 'паспорт' in query and re.search(r'Документы, удостоверяющие гражданство',item['title'],re.I):score+=1000
                     if legal_topic=='family' and 'алиментов' in query and 'несовершеннолетних детей' in query:
                         number=re.search(r'Статья\s+(\d+)',item['title'])
@@ -89,13 +96,14 @@ class ConsultantLibrary:
                     if current and len(current)+len(line)+1>4000:pieces.append(current);current=''
                     current=(current+'\n'+line).strip()
                 if current:pieces.append(current)
-                ranked=sorted(enumerate(pieces),key=lambda row:(0 if row[0]==0 else 1,-(len(words & terms(row[1]))+(1000 if 'чек' in query.casefold() and 'чек' in row[1].casefold() else 0))))[:3]
+                ranked=list(enumerate(pieces))[:2 if expected_article.group(1)=='39.15' else 1] if acquisition else sorted(enumerate(pieces),key=lambda row:(0 if row[0]==0 else 1,-(len(words & terms(row[1]))+(1000 if 'чек' in query.casefold() and 'чек' in row[1].casefold() else 0))))[:3]
+                article_left=min(budget.context_left,8000 if expected_article.group(1)=='39.15' else 4000) if acquisition else budget.context_left
                 for index,piece in sorted(ranked):
-                    if len(piece)>budget.context_left:omitted=True;continue
+                    if len(piece)>budget.context_left or len(piece)>article_left:omitted=True;continue
                     document_id='cp_'+root['id']+'_'+hashlib.sha256(item['url'].encode()).hexdigest()[:8]
                     fragment={'document_id':document_id,'title':parent['title'],'citation':item['title'],'act_designation':parent['act_designation'],'version':parent['edition_label'],'source_url':page.canonical_url,'effective_from':parent['effective_from'],'text':piece,'page_hash':page_hash,'part_index':index,'demo':False,'partial':len(pieces)>1 or omitted,'retrieved_at':page.checked_at,'last_checked_at':page.checked_at,'extraction_status':'verified_current','scope_note':parent['scope_note']}
-                    fid=self.cache.put(fragment);self.allowed_ids.add(fid);self.fragments.append(self.cache.read(fid,as_of_date=as_of_date,now=self.now()));budget.context_left-=len(piece)
-                if depth==0 and not passport_loss:
+                    fid=self.cache.put(fragment);self.allowed_ids.add(fid);self.fragments.append(self.cache.read(fid,as_of_date=as_of_date,now=self.now()));budget.context_left-=len(piece);article_left-=len(piece)
+                if depth==0 and not passport_loss and not acquisition:
                     referenced=set(re.findall(r'стат(?:ь[а-яё]+|ей)\s+(\d+(?:\.\d+)?)',text,re.I))
                     for link in parent['toc']:
                         number=re.search(r'Статья\s+(\d+(?:\.\d+)?)',link['title'])
