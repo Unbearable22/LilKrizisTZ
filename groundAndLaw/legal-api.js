@@ -128,7 +128,12 @@
                     method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,
                     body:JSON.stringify({question,intake,chat_id:chatId,history})
                 });
-                const result=await response.json();
+                let result;
+                try{result=await response.json();}
+                catch(error){
+                    if(error.name==='AbortError')throw error;
+                    throw new Error('Сервер не передал полный ответ: соединение прервалось. Предыдущий ответ, если он был, сохранён. Повторите запрос после восстановления связи.');
+                }
                 if(this.pending.get(chatId)!==request)return;
                 if(!response.ok)throw new Error(result.answer || 'Сервер не смог обработать запрос.');
                 if(result.chat_id!==chatId)throw new Error('Ответ не соответствует исходному чату.');

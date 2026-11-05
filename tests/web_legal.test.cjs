@@ -30,6 +30,18 @@ test('API error is shown and a later retry can succeed',async()=>{
  assert.equal(results[1].status,'answered');
 });
 
+test('empty or truncated proxy responses never expose JSON parser errors',async()=>{
+ for(const ok of [false,true]){
+  const results=[];let calls=0;
+  const client=new LegalClient({fetch:async()=>{calls++;return {ok,status:ok?200:502,json:async()=>{throw new SyntaxError('Unexpected end of JSON input')}}},onResult:(c,m,r)=>results.push(r)});
+  await client.submit({chatId:'a',requestId:'m',question:'Вопрос'});
+  assert.equal(calls,1);assert.equal(results[0].status,'error');
+  assert.doesNotMatch(results[0].answer,/JSON|SyntaxError|Unexpected|Response/);
+  assert.match(results[0].answer,/соединени|[Сс]ервер/);
+  assert.equal(client.busy('a'),false);
+ }
+});
+
 test('attachments and concurrent duplicate sends do not trigger ignored input or duplicate calls',async()=>{
  assert.equal(typeof LegalClient,'function');let calls=0;let finish;const results=[];
  const client=new LegalClient({fetch:()=>{calls++;return new Promise(r=>finish=r)},onResult:(c,m,r)=>results.push(r)});
